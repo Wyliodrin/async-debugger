@@ -2,34 +2,29 @@
 import { ref } from "vue";
 // import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import DataTable from "primevue/datatable";
+import Column from "primevue/column";
 
 type Task = {
-    id: number;
-    tid?: number;
-    name?: string;
-    kind?: string;
+	id: number;
+	tid?: number;
+	name?: string;
+	kind?: string;
 };
 
-listen<[Task]>("task-update", (event) => {
-    tasks.value = event.payload;
-});
-
-const headers = [
-    {
-        align: "start",
-        key: "tid",
-        sortable: false,
-        title: "Id",
-    },
-    { key: "name", title: "Name" },
-    { key: "kind", title: "Kind" },
-];
-
 const tasks = ref([] as Task[]);
+
+listen<[Task]>("task-update", (event) => {
+	tasks.value = event.payload;
+	console.log("Afisez tasks:");
+	console.log(tasks.value[0]);
+});
 </script>
 
 <template>
-    <v-app>
-        <v-data-table :headers="headers" :items="tasks"></v-data-table>
-    </v-app>
+	<DataTable :value="tasks">
+		<Column field="name" header="Name"></Column>
+		<Column field="tid" header="ID"></Column>
+		<Column field="kind" header="Type"></Column>
+	</DataTable>
 </template>
