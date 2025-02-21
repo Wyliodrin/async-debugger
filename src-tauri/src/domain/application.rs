@@ -1,15 +1,13 @@
-use anyhow::Result;
-use std::sync::Arc;
-use tokio::sync::mpsc::Sender;
+use std::collections::HashMap;
 
+use super::storable::Storable;
+use crate::error::Error as TraceError;
+use crate::mappers::read_file;
+use crate::state_manager::connection_manager::{Command, Connection};
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tauri::Url;
 use uuid::Uuid;
-
-use super::{
-    connection::{self, Command, Connection, Event},
-    Context,
-};
 
 #[derive(Default, Debug, Serialize, Deserialize, PartialEq, Copy, Clone)]
 pub(crate) enum State {
@@ -18,7 +16,10 @@ pub(crate) enum State {
     Enabled,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+/// Application tracked by the application
+///
+/// Keeps app's metadatas and current state
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub(crate) struct Application {
     id: Uuid,
     title: String,
@@ -45,7 +46,7 @@ impl Application {
         &self.id
     }
 
-    pub fn title(&self) -> &str {
+    pub fn _title(&self) -> &str {
         &self.title
     }
 
@@ -53,20 +54,21 @@ impl Application {
         &self.url
     }
 
-    pub fn state(&self) -> State {
+    pub fn _state(&self) -> State {
         self.state
     }
 
-    pub async fn enable(&mut self, event_sender: Sender<(Uuid, Event)>) {
+    // vreau sa vad info pentru aplicatia asta
+    pub fn enable(&mut self, connection: Connection) {
         if self.state == State::Disabled {
             self.state = State::Enabled;
-            self.connection = Some(connection::start(self.id, self.url.clone(), event_sender));
+            self.connection = Some(connection);
         }
     }
 
     pub async fn disable(&mut self) {
         if let Some(connection) = self.connection.take() {
-            connection.commands.send(Command::Disconnect).await;
+            connection.commands.send(Command::Disconnect).await.ok();
             self.state = State::Disabled;
         }
     }
@@ -77,22 +79,14 @@ enum ApplicationStatus {
     Enabled,
 }
 
-impl Context {
-    pub async fn add_application(&self, title: String, url: Url) -> Uuid {
-        let mut applications = self.applications.write().await;
-        let application = Arc::new(Application::new(title, url));
-        applications.insert(application.id().to_owned(), application.clone());
-        application.id
-    }
+#[async_trait]
+impl Storable<HashMap<Uuid, Application>> for Application {
+    const FILE_EXTENSION: &str = "applications.json";
+    async fn load_all(path: String) -> Result<HashMap<Uuid, Application>, TraceError> {
+        let apps =
+            serde_json::from_str(&read_file(&format!("{}/{}", path, Self::FILE_EXTENSION)).await?)
+                .map_err(|err| TraceError::Serde(err))?;
 
-    pub async fn applications(&self) -> Vec<Arc<Application>> {
-        (*self.applications.read().await)
-            .values()
-            .cloned()
-            .collect()
-    }
-
-    pub async fn delete_connection(&self) -> Result<Application> {
-        todo!()
+        Ok(apps)
     }
 }

@@ -16,7 +16,7 @@ const tasks = ref([] as Task[]);
 
 listen<[Task]>("update:tasks", (event) => {
     tasks.value = event.payload;
-    console.log(tasks);
+    console.log("Afisez task " + JSON.stringify(tasks.value[0]));
 });
 </script>
 

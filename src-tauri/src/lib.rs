@@ -1,68 +1,72 @@
+mod commands;
+mod domain;
+mod error;
+mod infra;
+mod mappers;
+mod state_manager;
+mod ui_manager;
+
+use state_manager::StateManager;
 use std::{sync::Arc, time::Duration};
 use tauri::{async_runtime, Manager};
-use tokio::{sync::mpsc, time::sleep};
+use tokio::{task, time::sleep};
 
-mod commands;
-mod context;
-mod error;
+pub async fn run() {
+    // Load context
+    let (state_manager, updates_receiver) = StateManager::new()
+        .await
+        // TODO: should we panic here or disable the persistency?
+        .unwrap_or_else(|err| panic!("Cannot start application due to {err:?}"));
 
-use context::{connection::Event, Context};
+    let shared_state = Arc::new(state_manager);
 
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
+    // Start job
+    let state_manager = shared_state.clone();
+    task::spawn(async move {
+        state_manager.run(updates_receiver).await;
+    });
 
-pub fn run() {
-    let (event_sender, mut event_receiver) = mpsc::channel(100);
-    let shared_context = Arc::new(Context::new(event_sender));
-    let context_update_ui = shared_context.clone();
-    let context = shared_context.clone();
-
+    // Clone for ui_updates
+    let ui_state_manager = shared_state.clone();
     tauri::Builder::default()
+        .manage(shared_state)
         .setup(move |app| {
             // FIX: workaround for the compilation error of the tonic crate,
             //      we need to compile using `--release` for now
             let window = app.get_webview_window("main").unwrap();
-            window.open_devtools();
-            // window.close_devtools();
+
+            // Open dev tools if in debug build
+            #[cfg(debug_assertions)]
+            {
+                window.open_devtools();
+            }
 
             let app_handle = app.handle().clone();
 
-            // update ui
+            // println!("In the setup 2");
+            // let store = app.store("/Users/amalia/Wyliodrin/async-debugger/store.json")?;
+            // println!("In the setup 3");
+            // store.set("random", 2);
+            // println!("In the setup 4");
+            // let value = store.get("random");
+            // println!("Store value is: {value:?}");
+
+            // update ui once per second
             // TODO needs to be improved
             async_runtime::spawn(async move {
                 loop {
                     sleep(Duration::from_secs(1)).await;
-                    context_update_ui
-                        .emit_update_applications(&app_handle)
-                        .await;
-                    context_update_ui.emit_update_tasks(&app_handle).await;
+                    ui_state_manager.emit_update_applications(&app_handle).await;
+                    ui_state_manager.emit_update_tasks(&app_handle).await;
                 }
             });
 
-            // event loop
-            async_runtime::spawn(async move {
-                while let Some((app_id, event)) = event_receiver.recv().await {
-                    match event {
-                        Event::Update(update) => {
-                            if let Some(task_update) = update.task_update {
-                                context.handle_task_update(app_id, task_update).await;
-
-                                // println!("new tasks: {:?}", tasks);
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            });
             Ok(())
         })
-        .manage(shared_context)
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
-            commands::applications::applications_add
+            commands::applications::applications_add,
+            commands::applications::delete_application
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
