@@ -43,16 +43,8 @@ pub async fn run() {
 
             let app_handle = app.handle().clone();
 
-            // println!("In the setup 2");
-            // let store = app.store("/Users/amalia/Wyliodrin/async-debugger/store.json")?;
-            // println!("In the setup 3");
-            // store.set("random", 2);
-            // println!("In the setup 4");
-            // let value = store.get("random");
-            // println!("Store value is: {value:?}");
-
             // update ui once per second
-            // TODO needs to be improved
+            // TODO could be improved
             async_runtime::spawn(async move {
                 loop {
                     sleep(Duration::from_secs(1)).await;
@@ -66,7 +58,8 @@ pub async fn run() {
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             commands::applications::applications_add,
-            commands::applications::delete_application
+            commands::applications::delete_application,
+            commands::applications::disable_app,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

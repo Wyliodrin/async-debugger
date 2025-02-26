@@ -8,6 +8,7 @@ use std::{
 use tokio::sync::RwLockWriteGuard;
 
 pub trait DataBaseWrite<D: Serialize + Clone> {
+    #[allow(unused)]
     fn writeable(&mut self) -> &mut D;
 }
 

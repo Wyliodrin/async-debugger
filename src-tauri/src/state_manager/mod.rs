@@ -1,4 +1,4 @@
-// todo: check if pub needed
+// TODO: check if pub needed
 pub mod connection_manager;
 mod database;
 pub mod state;
@@ -8,7 +8,6 @@ use crate::error::Error as TraceError;
 use crate::state_manager::state::State;
 use anyhow::Result;
 use connection_manager::{ConnectionManager, Event};
-use console_api::trace::trace_server::Trace;
 use log::{error, info};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter as _};
@@ -19,6 +18,7 @@ use uuid::Uuid;
 pub struct StateManager {
     // Mpsc used to receive updates about connected applications
     // (eg. number of running tasks, time ran)
+    // TODO: check if needed
     // pub updates_sender: Sender<(Uuid, Event)>,
 
     // Manages the connection to the running applications
@@ -76,14 +76,8 @@ impl StateManager {
                         _ => {}
                     }
                 },
-                // // Update UI each 100ms
-                // _tick = sleep(Duration::from_millis(100)) => {
-                //     UiManager::refresh(&self.state)
-                // }
-
                 // todo: add other events receivers
                 // todo: add receiver to add application and send to connection manager then update state
-
             }
         }
     }
@@ -112,6 +106,10 @@ impl StateManager {
         Ok(app_id)
     }
 
+    pub async fn disable_application(&self, uuid: Uuid) -> Result<(), TraceError> {
+        self.state.disable_app(uuid).await
+    }
+
     /// Returns a list of the applications currently registered in the app
     /// (not necessarily active too)
     pub async fn _current_applications(&self) -> Vec<Arc<Application>> {
@@ -124,6 +122,8 @@ impl StateManager {
     }
 
     // endregion
+
+    // region UPDATES
 
     pub async fn emit_update_tasks(&self, app_handle: &AppHandle) {
         let tasks = self.state.get_tasks().await;
@@ -139,4 +139,6 @@ impl StateManager {
             )
             .ok();
     }
+
+    // endregion
 }

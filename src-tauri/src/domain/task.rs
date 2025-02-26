@@ -1,10 +1,9 @@
-use std::{collections::HashMap, hash::Hash};
-
 use super::storable::Storable;
 use crate::error::Error as TraceError;
 use crate::mappers::read_file;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

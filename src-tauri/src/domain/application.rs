@@ -10,7 +10,7 @@ use tauri::Url;
 use uuid::Uuid;
 
 #[derive(Default, Debug, Serialize, Deserialize, PartialEq, Copy, Clone)]
-pub(crate) enum State {
+pub(crate) enum ApplicationState {
     #[default]
     Disabled,
     Enabled,
@@ -24,7 +24,7 @@ pub(crate) struct Application {
     id: Uuid,
     title: String,
     url: Url,
-    state: State,
+    state: ApplicationState,
 
     #[serde(skip)]
     connection: Option<Connection>,
@@ -36,7 +36,7 @@ impl Application {
             id: Uuid::new_v4(),
             title,
             url,
-            state: State::Disabled,
+            state: ApplicationState::Disabled,
 
             connection: None,
         }
@@ -54,14 +54,14 @@ impl Application {
         &self.url
     }
 
-    pub fn _state(&self) -> State {
+    pub fn state(&self) -> ApplicationState {
         self.state
     }
 
     // vreau sa vad info pentru aplicatia asta
     pub fn enable(&mut self, connection: Connection) {
-        if self.state == State::Disabled {
-            self.state = State::Enabled;
+        if self.state == ApplicationState::Disabled {
+            self.state = ApplicationState::Enabled;
             self.connection = Some(connection);
         }
     }
@@ -69,14 +69,9 @@ impl Application {
     pub async fn disable(&mut self) {
         if let Some(connection) = self.connection.take() {
             connection.commands.send(Command::Disconnect).await.ok();
-            self.state = State::Disabled;
+            self.state = ApplicationState::Disabled;
         }
     }
-}
-
-enum ApplicationStatus {
-    Disabled,
-    Enabled,
 }
 
 #[async_trait]

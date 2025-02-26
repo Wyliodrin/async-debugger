@@ -6,7 +6,6 @@ use crate::{
 use async_trait::async_trait;
 use log::{debug, error};
 use std::{collections::HashMap, sync::Arc};
-use tauri::App;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 

@@ -8,25 +8,32 @@ use crate::state_manager::StateManager;
 
 #[tauri::command]
 pub async fn applications_add(
-    context: State<'_, Arc<StateManager>>,
+    state_manager: State<'_, Arc<StateManager>>,
     title: String,
     url: &str,
 ) -> Result<Uuid, Error> {
     info!("Received command to add application with title {title} and url {url}");
 
     let url = url.try_into()?;
-    context.add_application(title, url).await
+    state_manager.add_application(title, url).await
 }
 
 #[tauri::command]
 pub async fn delete_application(
-    context: State<'_, Arc<StateManager>>,
+    state_manager: State<'_, Arc<StateManager>>,
     uuid: Uuid,
 ) -> Result<(), Error> {
-    context.delete_connection(uuid).await;
+    state_manager.delete_connection(uuid).await;
 
     Ok(())
 }
 
 // pub async fn enable_app(context: State<'_, Arc<Context>>) {}
-// pub async fn disable_app(context: State<'_, Arc<Context>>) {}
+
+#[tauri::command]
+pub async fn disable_app(
+    state_manager: State<'_, Arc<StateManager>>,
+    uuid: Uuid,
+) -> Result<(), Error> {
+    state_manager.disable_application(uuid).await
+}

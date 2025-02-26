@@ -1,13 +1,14 @@
 use super::database::Database;
+use crate::domain::application::ApplicationState;
 use crate::error::Error as TraceError;
+use crate::infra::guard::DataBaseWrite;
 use crate::infra::storage::Storage;
 use crate::{
     domain::{application::Application, Task},
     mappers::tasks::map_to_domain_task,
 };
 use console_api::tasks::TaskUpdate;
-use log::{error, info};
-use std::path::{Path, PathBuf};
+use log::{error, info, warn};
 use std::sync::Arc;
 use tokio::fs;
 use uuid::Uuid;
@@ -15,7 +16,6 @@ use uuid::Uuid;
 /// Is managing the access to the database and provides access method
 /// tailored for the applications business locic needs
 pub struct State {
-    storage_folder: PathBuf,
     database: Arc<dyn Storage>,
 }
 
@@ -32,8 +32,6 @@ impl State {
         info!("Storage location is: {path:?}");
 
         Self {
-            storage_folder: path.clone(),
-            // TODO: remove unwrap here
             database: Arc::new(Database::new(path.as_path().to_string_lossy().to_string())),
         }
     }
@@ -63,7 +61,6 @@ impl State {
             Database::load(database_path.as_path().to_string_lossy().to_string()).await?;
 
         Ok(State {
-            storage_folder: database_path,
             database: Arc::new(database),
         })
     }
@@ -86,6 +83,20 @@ impl State {
             .insert(application.id().clone(), Arc::new(application));
     }
 
+    pub async fn disable_app(&self, uuid: Uuid) -> Result<(), TraceError> {
+        let mut guard = self.database.applications_write().await;
+
+        if let Some((_uuid, application)) = guard
+            .iter_mut()
+            .find(|(app_uuid, _app)| app_uuid.eq(&&uuid))
+        {
+            let app = application.writeable();
+            app.disable().await;
+        }
+
+        Ok(())
+    }
+
     pub async fn delete_app(&self, uuid: Uuid) {
         self.database.applications_write().await.remove(&uuid);
     }
@@ -95,26 +106,35 @@ impl State {
     // region TASKS
 
     pub async fn handle_task_update(&self, app_id: Uuid, task_update: TaskUpdate) {
-        // Handling new tasks
-        for task in task_update.new_tasks {
-            if let Some(task) = map_to_domain_task(app_id, &task) {
-                info!("Received a new task for application with id {app_id}");
-                self.database
-                    .tasks_write()
-                    .await
-                    .insert(task.id(), Arc::new(task));
+        if let Some(app) = self.database.applications_read().await.get(&app_id) {
+            if app.state() == ApplicationState::Disabled {
+                // If app is disabled we dont save anything
+                return;
             }
-        }
 
-        // Handling dropped tasks
-        for (tid, updated_task) in task_update.stats_update {
-            if updated_task.dropped_at.is_some() {
-                info!("A task was dropped for application {app_id}");
-                self.database
-                    .tasks_write()
-                    .await
-                    .remove(&format!("{}.{}", app_id, tid));
+            // Saviing new tasks
+            for task in task_update.new_tasks {
+                if let Some(task) = map_to_domain_task(app_id, &task) {
+                    info!("Received a new task for application with id {app_id}");
+                    self.database
+                        .tasks_write()
+                        .await
+                        .insert(task.id(), Arc::new(task));
+                }
             }
+
+            // Saving dropped tasks
+            for (tid, updated_task) in task_update.stats_update {
+                if updated_task.dropped_at.is_some() {
+                    info!("A task was dropped for application {app_id}");
+                    self.database
+                        .tasks_write()
+                        .await
+                        .remove(&format!("{}.{}", app_id, tid));
+                }
+            }
+        } else {
+            warn!("Received an update for an app that is not registered");
         }
     }
 

@@ -1,12 +1,17 @@
+#![allow(unused)]
+
 use crate::error::Error as TraceError;
 use console_api::instrument::{instrument_client::InstrumentClient, InstrumentRequest, Update};
-use log::{error, info};
+use log::{error, info, warn};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tauri::Url;
 use tokio::{
     select,
-    sync::mpsc::{self, Sender},
-    sync::RwLock,
+    sync::{
+        mpsc::{self, Sender},
+        RwLock,
+    },
+    time::sleep,
 };
 use tonic::{transport::Endpoint, Streaming};
 use uuid::Uuid;
@@ -51,15 +56,16 @@ impl ConnectionManager {
         let updates_sender = self.updates_sender.clone();
 
         if self.active_connections.read().await.contains_key(&uuid) {
+            warn!("Tried to add application with uuid {uuid}, but the id is already attached to a connected application");
             return Err(TraceError::ApplicationAlreadyConnected(uuid));
         }
 
         let connection_task = tokio::task::spawn(async move {
             'connection: loop {
-                // TODO: de verificat cine asculta, eventual in UI ca sa afisam ca suntem sau nu conectati la aplicatie
+                // TODO: to check who will listen on this stream; enventually in the UI to give feedback to the user while trying to connect
                 updates_sender.send((uuid, Event::Connecting)).await.ok();
 
-                // Incerc sa ma conectez
+                // Connect the app
                 let connection = 'connect: loop {
                     select! {
                         connection = Self::connect_to_app(&url) => {
@@ -75,15 +81,18 @@ impl ConnectionManager {
                 };
 
                 // Vad daca primesc comenzi pt aplicatie (gen disconnect/disable)
+                // Check connection
                 match connection {
                     Ok(mut update_stream) => {
                         info!("Successfully connected to application with url {url}");
 
-                        // todo: cine asculta aici?
+                        // TODO: who listens here?
                         updates_sender.send((uuid, Event::Connected)).await.ok();
 
+                        // Wait for events
                         loop {
                             select! {
+                                // Wait for new updates regarding our app
                                 update = update_stream.message() => {
                                     match update {
                                         Ok(message) => {
@@ -99,14 +108,14 @@ impl ConnectionManager {
                                         }
                                     }
                                 }
+                                // Wait for external commands
                                 command = command_receiver.recv() => {
                                     if let Some(command) = command {
                                         match command {
                                             Command::Disconnect => break 'connection,
                                         }
                                     } else {
-                                        // command stream is closed,
-                                        // disconnect
+                                        // Command stream is closed so we exit
                                         break 'connection;
                                     }
                                 }
@@ -119,7 +128,9 @@ impl ConnectionManager {
                             .send((uuid, Event::Error(TraceError::Anyhow(error.into()))))
                             .await
                             .ok();
-                        tokio::time::sleep(Duration::from_secs(5)).await;
+
+                        // Sleep before trying to connect again
+                        sleep(Duration::from_secs(1)).await;
                     }
                 }
             }
