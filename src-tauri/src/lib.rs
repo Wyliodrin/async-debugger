@@ -1,4 +1,5 @@
 mod commands;
+mod common;
 mod domain;
 mod error;
 mod infra;
@@ -10,8 +11,14 @@ use state_manager::StateManager;
 use std::{sync::Arc, time::Duration};
 use tauri::{async_runtime, Manager};
 use tokio::{task, time::sleep};
+use url::Url;
 
 pub async fn run() {
+    // Check PID
+    let url: Url = Url::parse("http://127.0.0.1:6669/").unwrap();
+    let pid = common::get_pid_hosting_at(url);
+    println!("PID: {:?}", pid);
+
     // Load context
     let (state_manager, updates_receiver) = StateManager::new()
         .await

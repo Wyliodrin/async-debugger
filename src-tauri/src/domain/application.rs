@@ -21,6 +21,7 @@ pub(crate) enum ApplicationState {
 /// Keeps app's metadatas and current state
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub(crate) struct Application {
+    pid: u32,
     id: Uuid,
     title: String,
     url: Url,
@@ -31,8 +32,9 @@ pub(crate) struct Application {
 }
 
 impl Application {
-    pub fn new(title: String, url: Url) -> Application {
+    pub fn new(pid: u32, title: String, url: Url) -> Application {
         Application {
+            pid,
             id: Uuid::new_v4(),
             title,
             url,
@@ -40,6 +42,10 @@ impl Application {
 
             connection: None,
         }
+    }
+
+    pub fn pid(&self) -> u32 {
+        self.pid
     }
 
     pub fn id(&self) -> &Uuid {

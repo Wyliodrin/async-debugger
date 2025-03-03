@@ -1,3 +1,4 @@
+use url::Url;
 use uuid::Uuid;
 
 #[derive(Debug, thiserror::Error)]
@@ -14,6 +15,8 @@ pub enum Error {
     Serde(#[from] serde_json::Error),
     #[error("Cannot create the storage directory at path {path} due to {error}")]
     CannotCreateStorage { error: anyhow::Error, path: String },
+    #[error("Could not find the PID of an application hosting at {url}")]
+    PIDNotFound { url: Url },
 }
 
 impl serde::Serialize for Error {

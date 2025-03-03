@@ -3,9 +3,9 @@ pub mod connection_manager;
 mod database;
 pub mod state;
 
-use crate::domain::application::Application;
 use crate::error::Error as TraceError;
 use crate::state_manager::state::State;
+use crate::{common::get_pid_hosting_at, domain::application::Application};
 use anyhow::Result;
 use connection_manager::{ConnectionManager, Event};
 use log::{error, info};
@@ -90,8 +90,12 @@ impl StateManager {
     ///
     /// Is also connecting to the application in order to receive updates about it
     pub async fn add_application(&self, title: String, url: Url) -> Result<Uuid, TraceError> {
+        // Find the PID of the app
+        let pid =
+            get_pid_hosting_at(url.clone()).ok_or(TraceError::PIDNotFound { url: url.clone() })?;
+
         // Create and enable application
-        let mut application = Application::new(title, url);
+        let mut application = Application::new(pid, title, url);
         let app_id = application.id().clone();
 
         // Connect to the app
