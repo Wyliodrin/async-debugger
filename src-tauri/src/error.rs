@@ -17,6 +17,10 @@ pub enum Error {
     CannotCreateStorage { error: anyhow::Error, path: String },
     #[error("Could not find the PID of an application hosting at {url}")]
     PIDNotFound { url: Url },
+    #[error("Could not find the application with the PID {pid}")]
+    ApplicationProcessNotFound { pid: u32 },
+    #[error("Could not read informations about process with PID {pid}")]
+    CannotReadProcessInfo { pid: u32 },
 }
 
 impl serde::Serialize for Error {

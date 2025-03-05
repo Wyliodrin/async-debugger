@@ -1,5 +1,7 @@
+use super::connection_manager::{AppUpdate, Connection};
 use super::database::Database;
-use crate::domain::application::ApplicationState;
+use crate::common::get_pid_hosting_at;
+use crate::domain::application::{self, ApplicationState};
 use crate::error::Error as TraceError;
 use crate::infra::guard::DataBaseWrite;
 use crate::infra::storage::Storage;
@@ -7,8 +9,9 @@ use crate::{
     domain::{application::Application, Task},
     mappers::tasks::map_to_domain_task,
 };
+use console_api::instrument::Update;
 use console_api::tasks::TaskUpdate;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use std::sync::Arc;
 use tokio::fs;
 use uuid::Uuid;
@@ -60,6 +63,20 @@ impl State {
         let database =
             Database::load(database_path.as_path().to_string_lossy().to_string()).await?;
 
+        // Check if PIDs have changed, if so update them
+        let guard = database.applications_write().await;
+        for (_uuid, mut app) in guard.clone().into_iter() {
+            if let Some(pid) = get_pid_hosting_at(app.url().clone()) {
+                if app.pid() != pid {
+                    debug!("Updating the PID for app {} to {}", app.title(), pid);
+                    app.writeable().set_pid(pid);
+
+                    debug!("Checking pid {}", app.pid());
+                }
+            }
+        }
+        drop(guard);
+
         Ok(State {
             database: Arc::new(database),
         })
@@ -97,6 +114,19 @@ impl State {
         Ok(())
     }
 
+    pub async fn enable_app(&self, app_id: Uuid, connection: Connection) {
+        let mut guard = self.database.applications_write().await;
+
+        if let Some((_uuid, application)) = guard
+            .iter_mut()
+            .find(|(app_uuid, _app)| app_uuid.eq(&&app_id))
+        {
+            let app = application.writeable();
+            debug!("Storing the connection");
+            app.enable(connection);
+        }
+    }
+
     pub async fn delete_app(&self, uuid: Uuid) {
         self.database.applications_write().await.remove(&uuid);
     }
@@ -105,36 +135,58 @@ impl State {
 
     // region TASKS
 
+    /// Receives a [`TaskUpdate`] object and applies the updates received
+    /// on the current list of tasks
     pub async fn handle_task_update(&self, app_id: Uuid, task_update: TaskUpdate) {
         if let Some(app) = self.database.applications_read().await.get(&app_id) {
             if app.state() == ApplicationState::Disabled {
                 // If app is disabled we dont save anything
                 return;
             }
+        } else {
+            warn!("Received a task update for an app that is not registered");
+            return;
+        }
 
-            // Saviing new tasks
-            for task in task_update.new_tasks {
-                if let Some(task) = map_to_domain_task(app_id, &task) {
-                    info!("Received a new task for application with id {app_id}");
-                    self.database
-                        .tasks_write()
-                        .await
-                        .insert(task.id(), Arc::new(task));
-                }
+        // Saviing new tasks
+        for task in task_update.new_tasks {
+            if let Some(task) = map_to_domain_task(app_id, &task) {
+                info!("Received a new task for application with id {app_id}");
+                self.database
+                    .tasks_write()
+                    .await
+                    .insert(task.id(), Arc::new(task));
             }
+        }
 
-            // Saving dropped tasks
-            for (tid, updated_task) in task_update.stats_update {
-                if updated_task.dropped_at.is_some() {
-                    info!("A task was dropped for application {app_id}");
-                    self.database
-                        .tasks_write()
-                        .await
-                        .remove(&format!("{}.{}", app_id, tid));
-                }
+        // Saving dropped tasks
+        for (tid, updated_task) in task_update.stats_update {
+            if updated_task.dropped_at.is_some() {
+                info!("A task was dropped for application {app_id}");
+                self.database
+                    .tasks_write()
+                    .await
+                    .remove(&format!("{}.{}", app_id, tid));
+            }
+        }
+    }
+
+    /// Receives an update regarding an Application with the given [`app_id`]
+    /// The update consists in the new Application object that needs to replace
+    /// the old one
+    pub async fn handle_app_update(&self, app_id: Uuid, update: AppUpdate) {
+        if let Some(app) = self.database.applications_write().await.get_mut(&app_id) {
+            if app.state() == ApplicationState::Disabled {
+                // If app is disabled we dont save anything
+                return;
+            } else {
+                let writeable_app = app.writeable();
+                writeable_app.set_cpu_usage(update.cpu_usage);
+                writeable_app.set_memory_usage(update.memory_usage);
             }
         } else {
-            warn!("Received an update for an app that is not registered");
+            warn!("Received an application update for an app that is not registered");
+            return;
         }
     }
 

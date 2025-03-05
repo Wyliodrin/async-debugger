@@ -1,7 +1,8 @@
 use crate::error::Error as TraceError;
-use log::{error, info};
+use log::{debug, error, info};
 use serde::Serialize;
 use std::{
+    fmt::Debug,
     ops::{Deref, DerefMut},
     sync::Arc,
 };
@@ -12,13 +13,13 @@ pub trait DataBaseWrite<D: Serialize + Clone> {
     fn writeable(&mut self) -> &mut D;
 }
 
-pub struct WriteableDataBaseGuard<'a, D: Serialize> {
+pub struct WriteableDataBaseGuard<'a, D: Serialize + Debug> {
     pub(crate) folder: &'a str,
     pub(crate) title: &'a str,
     pub(crate) elements: RwLockWriteGuard<'a, D>,
 }
 
-impl<D: Serialize> Deref for WriteableDataBaseGuard<'_, D> {
+impl<D: Serialize + Debug> Deref for WriteableDataBaseGuard<'_, D> {
     type Target = D;
 
     fn deref(&self) -> &Self::Target {
@@ -26,7 +27,7 @@ impl<D: Serialize> Deref for WriteableDataBaseGuard<'_, D> {
     }
 }
 
-impl<D: Serialize> DerefMut for WriteableDataBaseGuard<'_, D> {
+impl<D: Serialize + Debug> DerefMut for WriteableDataBaseGuard<'_, D> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.elements
     }
@@ -38,10 +39,12 @@ impl<D: Serialize + Clone> DataBaseWrite<D> for Arc<D> {
     }
 }
 
-impl<D: Serialize> Drop for WriteableDataBaseGuard<'_, D> {
+impl<D: Serialize + Debug> Drop for WriteableDataBaseGuard<'_, D> {
     fn drop(&mut self) {
         let filename = format!("{}/{}.json", self.folder, self.title);
         info!("Storing {} to {filename}", self.title);
+
+        debug!("Storing elements {:?}", self.elements);
         serde_json::to_string_pretty(&*self.elements)
             .map_err(|error| {
                 error!("Failed to serialize {filename} ({error})");

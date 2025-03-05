@@ -21,8 +21,11 @@
         <DataTable :value="applications" size="small" tableStyle="min-width: 50rem">
         <Column field="title" header="Name" style="width: 34%"></Column>
         <Column field="pid" header="PID" style="width: 34%"></Column>
+        <Column field="start_time" header="Start Time" style="width: 34%"></Column>
         <Column field="id" header="Uuid" style="width: 33%"></Column>
         <Column field="url" header="Url" style="width: 33%"></Column>
+        <Column field="cpu_usage" header="Cpu" style="width: 33%"></Column>
+        <Column field="memory_usage" header="Memory" style="width: 33%"></Column>
         <!-- <Column header="Remove">
             <template #body="slotProps">
                 <Button

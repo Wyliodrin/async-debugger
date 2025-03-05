@@ -34,4 +34,5 @@ tauri-plugin-store = "2"
 env_logger = "0.10.0"
 async-trait = "0.1.86"
 dirs = "6.0.0"
-
+chrono = { version = "=0.4.37", features = ["serde"] }
+sysinfo = "0.33.1"
