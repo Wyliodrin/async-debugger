@@ -233,6 +233,7 @@ impl ConnectionManager {
 
         if let Some(process) = sys.process(Pid::from_u32(pid)) {
             debug!("CPU USAGE: {}", process.cpu_usage());
+            debug!("MEMORY USAGE: {}", process.memory());
             Some(AppUpdate {
                 cpu_usage: process.cpu_usage(),
                 memory_usage: process.memory(),

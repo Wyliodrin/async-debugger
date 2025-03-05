@@ -13,7 +13,7 @@ use console_api::instrument::Update;
 use console_api::tasks::TaskUpdate;
 use log::{debug, error, info, warn};
 use std::sync::Arc;
-use tokio::fs;
+use tokio::{fs, task_local};
 use uuid::Uuid;
 
 /// Is managing the access to the database and provides access method
@@ -64,8 +64,8 @@ impl State {
             Database::load(database_path.as_path().to_string_lossy().to_string()).await?;
 
         // Check if PIDs have changed, if so update them
-        let guard = database.applications_write().await;
-        for (_uuid, mut app) in guard.clone().into_iter() {
+        let mut guard = database.applications_write().await;
+        for app in guard.iter_mut() {
             if let Some(pid) = get_pid_hosting_at(app.url().clone()) {
                 if app.pid() != pid {
                     debug!("Updating the PID for app {} to {}", app.title(), pid);
@@ -85,28 +85,20 @@ impl State {
     // region APPLICATIONS
 
     pub async fn get_current_applications_list(&self) -> Vec<Arc<Application>> {
-        self.database
-            .applications_read()
-            .await
-            .values()
-            .cloned()
-            .collect()
+        self.database.applications_read().await
     }
 
     pub async fn store_app(&self, application: Application) {
         self.database
             .applications_write()
             .await
-            .insert(application.id().clone(), Arc::new(application));
+            .push(Arc::new(application));
     }
 
-    pub async fn disable_app(&self, uuid: Uuid) -> Result<(), TraceError> {
+    pub async fn disable_app(&self, app_id: Uuid) -> Result<(), TraceError> {
         let mut guard = self.database.applications_write().await;
 
-        if let Some((_uuid, application)) = guard
-            .iter_mut()
-            .find(|(app_uuid, _app)| app_uuid.eq(&&uuid))
-        {
+        if let Some(application) = guard.iter_mut().find(|app| app.id().eq(&app_id)) {
             let app = application.writeable();
             app.disable().await;
         }
@@ -117,19 +109,16 @@ impl State {
     pub async fn enable_app(&self, app_id: Uuid, connection: Connection) {
         let mut guard = self.database.applications_write().await;
 
-        if let Some((_uuid, application)) = guard
-            .iter_mut()
-            .find(|(app_uuid, _app)| app_uuid.eq(&&app_id))
-        {
+        if let Some(application) = guard.iter_mut().find(|app| app.id().eq(&app_id)) {
             let app = application.writeable();
             debug!("Storing the connection");
             app.enable(connection);
         }
     }
 
-    pub async fn delete_app(&self, uuid: Uuid) {
-        self.database.applications_write().await.remove(&uuid);
-    }
+    // pub async fn delete_app(&self, app_id: Uuid) {
+    //     self.database.applications_write().await.remove(&app_id);
+    // }
 
     // endregion
 
@@ -138,7 +127,13 @@ impl State {
     /// Receives a [`TaskUpdate`] object and applies the updates received
     /// on the current list of tasks
     pub async fn handle_task_update(&self, app_id: Uuid, task_update: TaskUpdate) {
-        if let Some(app) = self.database.applications_read().await.get(&app_id) {
+        if let Some(app) = self
+            .database
+            .applications_read()
+            .await
+            .iter()
+            .find(|app| app.id().eq(&app_id))
+        {
             if app.state() == ApplicationState::Disabled {
                 // If app is disabled we dont save anything
                 return;
@@ -152,10 +147,7 @@ impl State {
         for task in task_update.new_tasks {
             if let Some(task) = map_to_domain_task(app_id, &task) {
                 info!("Received a new task for application with id {app_id}");
-                self.database
-                    .tasks_write()
-                    .await
-                    .insert(task.id(), Arc::new(task));
+                self.database.tasks_write().await.push(Arc::new(task));
             }
         }
 
@@ -163,10 +155,8 @@ impl State {
         for (tid, updated_task) in task_update.stats_update {
             if updated_task.dropped_at.is_some() {
                 info!("A task was dropped for application {app_id}");
-                self.database
-                    .tasks_write()
-                    .await
-                    .remove(&format!("{}.{}", app_id, tid));
+                let mut guard = self.database.tasks_write().await;
+                guard.retain(|task| !(task.id == tid && task.app_id == app_id));
             }
         }
     }
@@ -175,7 +165,8 @@ impl State {
     /// The update consists in the new Application object that needs to replace
     /// the old one
     pub async fn handle_app_update(&self, app_id: Uuid, update: AppUpdate) {
-        if let Some(app) = self.database.applications_write().await.get_mut(&app_id) {
+        let mut guard = self.database.applications_write().await;
+        if let Some(app) = guard.iter_mut().find(|app| app.id().eq(&app_id)) {
             if app.state() == ApplicationState::Disabled {
                 // If app is disabled we dont save anything
                 return;
@@ -191,7 +182,7 @@ impl State {
     }
 
     pub async fn get_tasks(&self) -> Vec<Arc<Task>> {
-        self.database.tasks_read().await.values().cloned().collect()
+        self.database.tasks_read().await
     }
 
     // endregion

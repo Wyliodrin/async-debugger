@@ -160,10 +160,10 @@ impl StateManager {
         self.state.get_current_applications_list().await
     }
 
-    pub async fn delete_connection(&self, uuid: Uuid) {
-        self.connection_manager.disconnect_app(uuid).await;
-        self.state.delete_app(uuid).await
-    }
+    // pub async fn delete_connection(&self, uuid: Uuid) {
+    //     self.connection_manager.disconnect_app(uuid).await;
+    //     self.state.delete_app(uuid).await
+    // }
 
     // endregion
 

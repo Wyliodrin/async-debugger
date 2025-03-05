@@ -114,9 +114,9 @@ impl Application {
 }
 
 #[async_trait]
-impl Storable<HashMap<Uuid, Application>> for Application {
+impl Storable<Vec<Application>> for Application {
     const FILE_EXTENSION: &str = "applications.json";
-    async fn load_all(path: String) -> Result<HashMap<Uuid, Application>, TraceError> {
+    async fn load_all(path: String) -> Result<Vec<Application>, TraceError> {
         let apps =
             serde_json::from_str(&read_file(&format!("{}/{}", path, Self::FILE_EXTENSION)).await?)
                 .map_err(|err| TraceError::Serde(err))?;

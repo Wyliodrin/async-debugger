@@ -17,9 +17,9 @@ pub(crate) struct Database {
     storage_folder: String,
 
     // todo: astea trebuie scrise pe disk + incarcate la pornire
-    applications: tokio::sync::RwLock<HashMap<Uuid, Arc<Application>>>,
+    applications: tokio::sync::RwLock<Vec<Arc<Application>>>,
     // toate taskurile curente de la toate aplicatiile
-    tasks: tokio::sync::RwLock<HashMap<String, Arc<Task>>>,
+    tasks: tokio::sync::RwLock<Vec<Arc<Task>>>,
 }
 
 impl Database {
@@ -34,8 +34,8 @@ impl Database {
     pub(crate) fn new(storage_folder: String) -> Self {
         Self {
             storage_folder,
-            applications: RwLock::new(HashMap::new()),
-            tasks: RwLock::new(HashMap::new()),
+            applications: RwLock::new(Vec::new()),
+            tasks: RwLock::new(Vec::new()),
         }
     }
 
@@ -49,16 +49,13 @@ impl Database {
     /// an error will be returned
     pub(crate) async fn load(storage_folder: String) -> Result<Self, TraceError> {
         // Load all applications
-        let applications: HashMap<Uuid, Arc<Application>> =
+        let applications: Vec<Arc<Application>> =
             match Application::load_all(storage_folder.clone()).await {
-                Ok(apps) => apps
-                    .into_iter()
-                    .map(|(id, app)| (id, Arc::new(app)))
-                    .collect(),
+                Ok(apps) => apps.into_iter().map(|app| Arc::new(app)).collect(),
                 Err(error) => match error {
                     TraceError::PathNotFound(_) => {
                         debug!("Applications file not found, using empty list");
-                        HashMap::new()
+                        Vec::new()
                     }
                     _ => {
                         error!("Failed to load applications due to {error:?}");
@@ -68,19 +65,16 @@ impl Database {
             };
         debug!(
             "Successfully loaded {} applications from disk.",
-            applications.values().len()
+            applications.len()
         );
 
         // Load all tasks
-        let tasks: HashMap<String, Arc<Task>> = match Task::load_all(storage_folder.clone()).await {
-            Ok(tasks) => tasks
-                .into_iter()
-                .map(|(id, task)| (id, Arc::new(task)))
-                .collect(),
+        let tasks: Vec<Arc<Task>> = match Task::load_all(storage_folder.clone()).await {
+            Ok(tasks) => tasks.into_iter().map(|task| Arc::new(task)).collect(),
             Err(error) => match error {
                 TraceError::PathNotFound(_) => {
                     debug!("Tasks file not found, using empty list");
-                    HashMap::new()
+                    Vec::new()
                 }
                 _ => {
                     error!("Failed to load applications due to {error:?}");
@@ -88,10 +82,7 @@ impl Database {
                 }
             },
         };
-        debug!(
-            "Successfully loaded {} tasks from disk.",
-            tasks.values().len()
-        );
+        debug!("Successfully loaded {} tasks from disk.", tasks.len());
 
         Ok(Self {
             storage_folder,
@@ -103,13 +94,11 @@ impl Database {
 
 #[async_trait]
 impl Storage for Database {
-    async fn applications_read(&self) -> HashMap<Uuid, Arc<Application>> {
+    async fn applications_read(&self) -> Vec<Arc<Application>> {
         self.applications.read().await.clone()
     }
 
-    async fn applications_write(
-        &self,
-    ) -> WriteableDataBaseGuard<'_, HashMap<Uuid, Arc<Application>>> {
+    async fn applications_write(&self) -> WriteableDataBaseGuard<'_, Vec<Arc<Application>>> {
         let elements = self.applications.write().await;
 
         WriteableDataBaseGuard {
@@ -119,11 +108,11 @@ impl Storage for Database {
         }
     }
 
-    async fn tasks_read(&self) -> HashMap<String, Arc<Task>> {
+    async fn tasks_read(&self) -> Vec<Arc<Task>> {
         self.tasks.read().await.clone()
     }
 
-    async fn tasks_write(&self) -> WriteableDataBaseGuard<'_, HashMap<String, Arc<Task>>> {
+    async fn tasks_write(&self) -> WriteableDataBaseGuard<'_, Vec<Arc<Task>>> {
         let elements = self.tasks.write().await;
 
         WriteableDataBaseGuard {

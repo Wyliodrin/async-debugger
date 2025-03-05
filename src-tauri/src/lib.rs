@@ -60,7 +60,7 @@ pub async fn run() {
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             commands::applications::applications_add,
-            commands::applications::delete_application,
+            // commands::applications::delete_application,
             commands::applications::disable_app,
         ])
         .run(tauri::generate_context!())

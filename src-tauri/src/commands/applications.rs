@@ -18,15 +18,15 @@ pub async fn applications_add(
     state_manager.add_application(title, url).await
 }
 
-#[tauri::command]
-pub async fn delete_application(
-    state_manager: State<'_, Arc<StateManager>>,
-    uuid: Uuid,
-) -> Result<(), Error> {
-    state_manager.delete_connection(uuid).await;
+// #[tauri::command]
+// pub async fn delete_application(
+//     state_manager: State<'_, Arc<StateManager>>,
+//     uuid: Uuid,
+// ) -> Result<(), Error> {
+//     state_manager.delete_connection(uuid).await;
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 // pub async fn enable_app(context: State<'_, Arc<Context>>) {}
 
