@@ -29,6 +29,7 @@ pub async fn run() {
     // Clone for ui_updates
     let ui_state_manager = shared_state.clone();
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(shared_state)
         .setup(move |app| {
             // FIX: workaround for the compilation error of the tonic crate,
