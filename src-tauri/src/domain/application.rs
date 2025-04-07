@@ -6,7 +6,7 @@ use crate::state_manager::connection_manager::{Command, Connection};
 use async_trait::async_trait;
 use chrono::{DateTime, Local};
 use log::debug;
-use serde::{Deserialize, Serialize};
+use serde::{de, Deserialize, Serialize};
 use std::collections::HashMap;
 use tauri::Url;
 use uuid::Uuid;
@@ -16,6 +16,15 @@ pub(crate) enum ApplicationState {
     #[default]
     Disabled,
     Enabled,
+}
+
+#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub(crate) enum ConnectionStatus {
+    #[default]
+    Disconnected,
+    Connecting,
+    Connected,
+    Error(String),
 }
 
 /// Application tracked by the application
@@ -28,9 +37,11 @@ pub(crate) struct Application {
     title: String,
     url: Url,
     start_time: DateTime<Local>,
-    state: ApplicationState,
     cpu_usage: f32,
     memory_usage: u64,
+
+    state: ApplicationState,
+    connection_status: ConnectionStatus,
 
     #[serde(skip)]
     connection: Option<Connection>,
@@ -51,6 +62,7 @@ impl Application {
             url,
             start_time,
             state: ApplicationState::Enabled,
+            connection_status: ConnectionStatus::Disconnected,
             connection: None,
             cpu_usage: 0.0,
             memory_usage: 0,
@@ -114,9 +126,9 @@ impl Application {
 }
 
 #[async_trait]
-impl Storable<Vec<Application>> for Application {
+impl Storable<HashMap<Uuid, Application>> for Application {
     const FILE_EXTENSION: &str = "applications.json";
-    async fn load_all(path: String) -> Result<Vec<Application>, TraceError> {
+    async fn load_all(path: String) -> Result<HashMap<Uuid, Application>, TraceError> {
         let apps =
             serde_json::from_str(&read_file(&format!("{}/{}", path, Self::FILE_EXTENSION)).await?)
                 .map_err(|err| TraceError::Serde(err))?;

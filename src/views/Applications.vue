@@ -26,6 +26,7 @@
         <Column field="url" header="Url" style="width: 33%"></Column>
         <Column field="cpu_usage" header="Cpu" style="width: 33%"></Column>
         <Column field="memory_usage" header="Memory" style="width: 33%"></Column>
+        <Column field="process_status" header="Status" style="width: 33%"></Column>
         <!-- <Column header="Remove">
             <template #body="slotProps">
                 <Button

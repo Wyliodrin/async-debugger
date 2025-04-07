@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use url::Url;
 use uuid::Uuid;
 

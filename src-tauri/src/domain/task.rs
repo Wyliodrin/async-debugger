@@ -22,10 +22,10 @@ impl Task {
 }
 
 #[async_trait]
-impl Storable<Vec<Task>> for Task {
+impl Storable<HashMap<String, Task>> for Task {
     const FILE_EXTENSION: &str = "tasks.json";
 
-    async fn load_all(path: String) -> Result<Vec<Task>, TraceError> {
+    async fn load_all(path: String) -> Result<HashMap<String, Task>, TraceError> {
         let tasks =
             serde_json::from_str(&read_file(&format!("{}/{}", path, Self::FILE_EXTENSION)).await?)
                 .map_err(|err| TraceError::Serde(err))?;

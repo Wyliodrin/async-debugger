@@ -6,4 +6,5 @@ export interface Application {
   url: string;
   cpuUsage: number;
   memoryUsage: number;
+  processStatus: string;
 }
