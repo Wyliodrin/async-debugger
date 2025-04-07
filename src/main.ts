@@ -1,14 +1,12 @@
 import { createApp } from "vue";
-import PrimeVue from "primevue/config";
-import Aura from "@primevue/themes/aura";
-import "primeicons/primeicons.css";
-
+import { createPinia } from 'pinia';
 import App from "./App.vue";
+import vuetify from './plugins/vuetify';
+import VueTablerIcons from 'vue-tabler-icons';
+import { router } from './router';
 
 const app = createApp(App);
-app.use(PrimeVue, {
-  theme: {
-    preset: Aura,
-  },
-});
-app.mount("#app");
+app.use(router);
+app.use(createPinia());
+app.use(VueTablerIcons);
+app.use(vuetify).mount("#app");
