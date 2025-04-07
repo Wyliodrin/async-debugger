@@ -8,7 +8,6 @@ use crate::error::Error as TraceError;
 use crate::state_manager::state::State;
 use anyhow::Result;
 use connection_manager::{ConnectionManager, Event};
-use core::error;
 use log::{debug, error, info};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter as _};
@@ -171,14 +170,11 @@ impl StateManager {
 
     pub async fn emit_update_tasks(&self, app_handle: &AppHandle) {
         let tasks = self.state.get_tasks().await;
-        info!("Sending tasks update event with {} tasks", tasks.len());
         app_handle.emit("update:tasks", tasks).ok();
     }
 
     pub async fn emit_update_applications(&self, app_handle: &AppHandle) {
-        info!("Sending apps update event");
         let elements = self.state.get_current_applications_list().await;
-        debug!("Apps update: {:?}", elements);
         app_handle.emit("update:applications", elements).ok();
     }
 

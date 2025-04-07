@@ -43,8 +43,6 @@ impl<D: Serialize + Debug> Drop for WriteableDataBaseGuard<'_, D> {
     fn drop(&mut self) {
         let filename = format!("{}/{}.json", self.folder, self.title);
         info!("Storing {} to {filename}", self.title);
-
-        debug!("Storing elements {:?}", self.elements);
         serde_json::to_string_pretty(&*self.elements)
             .map_err(|error| {
                 error!("Failed to serialize {filename} ({error})");

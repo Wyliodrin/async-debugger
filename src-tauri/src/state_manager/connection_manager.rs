@@ -7,7 +7,7 @@ use crate::{
 use console_api::instrument::{instrument_client::InstrumentClient, InstrumentRequest, Update};
 use log::{debug, error, info, warn};
 use std::{clone, collections::HashMap, sync::Arc, time::Duration};
-use sysinfo::{Pid, System};
+use sysinfo::{Pid, ProcessRefreshKind, ProcessStatus, ProcessesToUpdate, System};
 use tauri::Url;
 use tokio::{
     select,
@@ -36,8 +36,9 @@ pub enum Event {
 }
 
 pub struct AppUpdate {
-    pub cpu_usage: f32,
+    pub cpu_usage: Option<f32>,
     pub memory_usage: u64,
+    pub process_status: ProcessStatus,
 }
 
 // TODO: need to check if still needed
@@ -227,16 +228,33 @@ impl ConnectionManager {
 
     async fn check_app_stats(pid: u32) -> Option<AppUpdate> {
         let mut sys = System::new_all();
+        let cpu_count = sys.cpus().len();
+        println!("CPUS: {cpu_count}");
 
-        // First we update all information of our `System` struct.
         sys.refresh_all();
+        // Wait a bit because CPU usage is based on diff.
+        sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL).await;
+
+        // Refresh CPU usage to get actual value.
+        sys.refresh_processes_specifics(
+            ProcessesToUpdate::All,
+            true,
+            ProcessRefreshKind::nothing().with_cpu(),
+        );
 
         if let Some(process) = sys.process(Pid::from_u32(pid)) {
             debug!("CPU USAGE: {}", process.cpu_usage());
             debug!("MEMORY USAGE: {}", process.memory());
+            let memory_mb = process.memory() / 1000000;
             Some(AppUpdate {
-                cpu_usage: process.cpu_usage(),
-                memory_usage: process.memory(),
+                cpu_usage: if process.cpu_usage() > 0.0 {
+                    // TODO: to be checked if the value is accurate
+                    Some(process.cpu_usage() / (cpu_count as f32))
+                } else {
+                    None
+                },
+                memory_usage: memory_mb,
+                process_status: process.status(),
             })
         } else {
             None
