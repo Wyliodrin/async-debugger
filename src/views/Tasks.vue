@@ -1,29 +1,58 @@
 <script setup lang="ts">
 import { ref } from "vue";
-// import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import DataTable from "primevue/datatable";
-import Column from "primevue/column";
-
-type Task = {
-    id: number;
-    tid?: number;
-    name?: string;
-    kind?: string;
-};
+import { Task } from "@/types/tasks";
 
 const tasks = ref([] as Task[]);
+const tasksSearch = ref('');
 
-listen<[Task]>("update:tasks", (event) => {
+const taskHeaders: any = ref([
+    { title: "App UUID", align: 'center', key: 'app_id'},
+    { title: "ID", align: 'center', key: 'id' },
+    { title: "TID", align: 'center', key: 'tid' },
+    { title: "Name", align: 'center', key: 'name' },
+    { title: "Type", align: 'center', key: 'kind' },
+
+]);
+
+const getTaskChipColor = (state: string): string => {
+    const colorMap: Record<string, string> = {
+        'SPAWN': 'green',
+        'BLOCKING': 'red'
+    };
+    return colorMap[state] || 'default';
+};
+listen<Task[]>("update:tasks", (event) => {
     tasks.value = event.payload;
     console.log("Afisez task " + JSON.stringify(tasks.value[0]));
 });
 </script>
 
 <template>
-    <DataTable :value="tasks" size="small" tableStyle="min-width: 50rem">
-        <Column field="name" header="Name" style="width: 34%"></Column>
-        <Column field="tid" header="ID" style="width: 33%"></Column>
-        <Column field="kind" header="Type" style="width: 33%"></Column>
-    </DataTable>
+    <v-card elevation="2">
+        <template v-slot:text>
+            <div class="d-flex align-center justify-space-between">
+                <div class="search-container">
+                    <v-text-field v-model="tasksSearch" label="Search" prepend-inner-icon="mdi-magnify"
+                        variant="outlined" hide-details single-line></v-text-field>
+                </div>
+            </div>
+        </template>
+
+        <v-data-table :search="tasksSearch" :headers="taskHeaders" :items="tasks">
+            <template v-slot:item.kind="{ item }">
+                <div class="justify-center">
+                    <v-chip :color="getTaskChipColor(item.kind)" class="text-uppercase" label size="small">
+                        <div>{{ item.kind }}</div>
+                    </v-chip>
+                </div>
+            </template>
+        </v-data-table>
+    </v-card>
 </template>
+
+<style scoped>
+.search-container {
+    width: 400px;
+}
+</style>
