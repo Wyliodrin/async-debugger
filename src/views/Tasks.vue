@@ -7,12 +7,13 @@ const tasks = ref([] as Task[]);
 const tasksSearch = ref('');
 
 const taskHeaders: any = ref([
-    { title: "App UUID", align: 'center', key: 'app_id'},
+    { title: "App UUID", align: 'center', key: 'app_id' },
     { title: "ID", align: 'center', key: 'id' },
     { title: "TID", align: 'center', key: 'tid' },
     { title: "Name", align: 'center', key: 'name' },
     { title: "Type", align: 'center', key: 'kind' },
-
+    { title: "Runtime", align: 'center', key: 'stats_info'},
+    { title: "Location", align: 'center', key: 'location'}
 ]);
 
 const getTaskChipColor = (state: string): string => {
@@ -22,10 +23,12 @@ const getTaskChipColor = (state: string): string => {
     };
     return colorMap[state] || 'default';
 };
+
 listen<Task[]>("update:tasks", (event) => {
     tasks.value = event.payload;
     console.log("Afisez task " + JSON.stringify(tasks.value[0]));
 });
+
 </script>
 
 <template>
@@ -45,6 +48,18 @@ listen<Task[]>("update:tasks", (event) => {
                     <v-chip :color="getTaskChipColor(item.kind)" class="text-uppercase" label size="small">
                         <div>{{ item.kind }}</div>
                     </v-chip>
+                </div>
+            </template>
+
+            <!-- <template v-slot:item.stats_info="{ item }">
+                <div class="justify-center">
+                    {{ item.stats_info.hours }}h:{{ item.stats_info.minutes }}m:{{ item.stats_info.seconds }}s
+                </div>
+            </template> -->
+
+            <template v-slot:item.location="{ item }">
+                <div class="justify-center">
+                    {{ item.location.file }}:{{ item.location.line }}:{{ item.location.column }}
                 </div>
             </template>
         </v-data-table>
