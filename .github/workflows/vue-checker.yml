@@ -1,0 +1,44 @@
+name: vue-checker
+on:
+  pull_request:
+  push:
+    branches:
+      - "main"
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions: read-all
+    outputs:
+      source: ${{ steps.filter.outputs.source }}
+      workflow: ${{ steps.filter.outputs.workflow }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            source: src/**
+            workflow: .github/workflows/vue-checker.yml
+
+  vue-checker:
+    runs-on: ubuntu-latest
+    permissions: read-all
+    needs: changes
+    if: |
+      needs.changes.outputs.source == 'true' ||
+      needs.changes.outputs.workflow == 'true'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Installing packages
+        run: |
+          npm i
+      - name: Vue Files Format
+        run: |
+          npx eslint src/**/*.vue --max-warnings=0
+      - name: Typescript Files Format
+        run: |
+          npx eslint src/**/*.ts --max-warnings=0
+      - name: Build
+        run: |
+          npm run build

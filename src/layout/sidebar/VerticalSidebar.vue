@@ -13,7 +13,7 @@ const drawer = layoutStore.getSidebarState;
 <template>
     <v-navigation-drawer v-model="drawer" location="left" temporary>
         <v-list class="py-5 px-4 bg-muted">
-            <template v-for="item in sidebarMenu">
+            <template v-for="item in sidebarMenu" :key="item.title">
                 <NavItem :item="item" />
             </template>
         </v-list>

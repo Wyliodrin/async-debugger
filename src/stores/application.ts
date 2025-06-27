@@ -1,4 +1,4 @@
-import { Application } from "@/types/applications";
+import { Application, ApplicationState } from "@/types/applications";
 import { invoke } from "@tauri-apps/api/core";
 import { defineStore } from "pinia";
 import { computed, Ref, ref } from "vue";
@@ -15,7 +15,7 @@ export const useApplicationStore = defineStore('applications', () => {
                     id: uuid as string,
                     title: title,
                     url: url,
-                    state: 'Enabled'
+                    state: ApplicationState.Enabled
                 });
             }
         ).catch(
@@ -45,7 +45,7 @@ export const useApplicationStore = defineStore('applications', () => {
     async function toggleAppState(appID: string) {
         const application = applications.value.find(item => item.id === appID);
         if (application) {
-            application.state = application.state === 'Enabled' ? 'Disabled' : 'Enabled';
+            application.state = application.state === ApplicationState.Enabled ? ApplicationState.Disabled : ApplicationState.Enabled;
         }
     };
 

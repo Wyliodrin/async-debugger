@@ -20,6 +20,7 @@ pub enum Command {
     Disconnect,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[non_exhaustive]
 pub enum Event {
     Connecting,
@@ -66,6 +67,7 @@ impl ConnectionManager {
                 updates_sender.send((uuid, Event::Connecting)).await.ok();
 
                 // Connect the app
+                #[allow(clippy::never_loop)]
                 let connection = 'connect: loop {
                     select! {
                         connection = Self::connect_to_app(&url) => {
@@ -142,7 +144,7 @@ impl ConnectionManager {
             .write()
             .await
             .insert(uuid, connection_task);
-        return Ok(connection);
+        Ok(connection)
     }
 
     pub(crate) async fn disconnect_app(&self, uuid: Uuid) {

@@ -28,7 +28,7 @@ impl Storable<HashMap<String, Task>> for Task {
     async fn load_all(path: String) -> Result<HashMap<String, Task>, TraceError> {
         let tasks =
             serde_json::from_str(&read_file(&format!("{}/{}", path, Self::FILE_EXTENSION)).await?)
-                .map_err(|err| TraceError::Serde(err))?;
+                .map_err(TraceError::Serde)?;
 
         Ok(tasks)
     }

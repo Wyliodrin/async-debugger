@@ -80,7 +80,7 @@ impl State {
         self.database
             .applications_write()
             .await
-            .insert(application.id().clone(), Arc::new(application));
+            .insert(*application.id(), Arc::new(application));
     }
 
     pub async fn disable_app(&self, uuid: Uuid) -> Result<(), TraceError> {
@@ -130,7 +130,7 @@ impl State {
                     self.database
                         .tasks_write()
                         .await
-                        .remove(&format!("{}.{}", app_id, tid));
+                        .remove(&format!("{app_id}.{tid}"));
                 }
             }
         } else {

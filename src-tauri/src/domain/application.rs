@@ -80,7 +80,7 @@ impl Storable<HashMap<Uuid, Application>> for Application {
     async fn load_all(path: String) -> Result<HashMap<Uuid, Application>, TraceError> {
         let apps =
             serde_json::from_str(&read_file(&format!("{}/{}", path, Self::FILE_EXTENSION)).await?)
-                .map_err(|err| TraceError::Serde(err))?;
+                .map_err(TraceError::Serde)?;
 
         Ok(apps)
     }

@@ -5,3 +5,8 @@ export type Task = {
     name?: string;
     kind: string;
 };
+
+export enum TaskState {
+  SPAWN = "SPAWN",
+  BLOCKING = "BLOCKING"
+};

@@ -67,13 +67,10 @@ impl StateManager {
             tokio::select! {
                 // Received updates about apps
                 Some((app_id, event)) = updates_receiver.recv() => {
-                    match event {
-                        Event::Update(update) => {
-                            if let Some(task_update) = update.task_update {
-                                self.state.handle_task_update(app_id, task_update).await;
-                            }
+                    if let Event::Update(update) = event {
+                        if let Some(task_update) = update.task_update {
+                            self.state.handle_task_update(app_id, task_update).await;
                         }
-                        _ => {}
                     }
                 },
                 // todo: add other events receivers
@@ -92,12 +89,12 @@ impl StateManager {
     pub async fn add_application(&self, title: String, url: Url) -> Result<Uuid, TraceError> {
         // Create and enable application
         let mut application = Application::new(title, url);
-        let app_id = application.id().clone();
+        let app_id = *application.id();
 
         // Connect to the app
         let connection = self
             .connection_manager
-            .connect_app(application.id().clone(), application.url().clone())
+            .connect_app(*application.id(), application.url().clone())
             .await?;
         application.enable(connection);
 
