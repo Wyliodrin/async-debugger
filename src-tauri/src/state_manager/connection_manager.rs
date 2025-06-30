@@ -151,10 +151,7 @@ impl ConnectionManager {
 
     async fn connect_to_app(url: &Url) -> Result<Box<Streaming<Update>>, TraceError> {
         let endpoint = Endpoint::new(url.to_string()).map_err(|e| TraceError::Anyhow(e.into()))?;
-        let channel = endpoint
-            .connect()
-            .await
-            .map_err(|e| TraceError::Anyhow(e.into()))?;
+        let channel = endpoint.connect().await.map_err(anyhow::Error::from)?;
         let mut client = InstrumentClient::new(channel);
         let update_request = tonic::Request::new(InstrumentRequest {});
         Ok(Box::new(

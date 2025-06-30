@@ -114,7 +114,13 @@ impl State {
 
             // Saviing new tasks
             for task in task_update.new_tasks {
-                if let Some(task) = map_to_domain_task(app_id, &task) {
+                // SAFETY: It should be ok to call unwrap here as any new task will have some stats
+                // about when it was spawned
+                if let Some(task) = map_to_domain_task(
+                    app_id,
+                    &task,
+                    &task_update.stats_update.get(&task.id.unwrap().id).unwrap(),
+                ) {
                     info!("Received a new task for application with id {app_id}");
                     self.database
                         .tasks_write()
