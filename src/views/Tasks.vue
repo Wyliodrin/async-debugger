@@ -7,7 +7,7 @@ const tasks = ref([] as Task[]);
 const tasksSearch = ref('');
 
 const taskHeaders: any = ref([
-    { title: "App UUID", align: 'center', key: 'app_id'},
+    { title: "App Name", align: 'center', key: 'app_name'},
     { title: "ID", align: 'center', key: 'id' },
     { title: "TID", align: 'center', key: 'tid' },
     { title: "Name", align: 'center', key: 'name' },

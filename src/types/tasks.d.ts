@@ -1,5 +1,5 @@
 export type Task = {
-    app_id: string,
+    app_name: string,
     id: number;
     tid?: number;
     name?: string;

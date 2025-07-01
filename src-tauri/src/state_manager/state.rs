@@ -150,16 +150,16 @@ impl State {
             return;
         }
 
-        // Saviing new tasks
-        for task in task_update.new_tasks {
-            if let Some(task) = map_to_domain_task(app_id, &task) {
-                info!("Received a new task for application with id {app_id}");
-                self.database
-                    .tasks_write()
-                    .await
-                    .insert(task.id(), Arc::new(task));
+            // Saving new tasks
+            for task in task_update.new_tasks {
+                if let Some(task) = map_to_domain_task(app_id, &task) {
+                    info!("Received a new task for application with id {app_id}");
+                    self.database
+                        .tasks_write()
+                        .await
+                        .insert(task.id(), Arc::new(task));
+                }
             }
-        }
 
         // Saving dropped tasks
         for (tid, updated_task) in task_update.stats_update {

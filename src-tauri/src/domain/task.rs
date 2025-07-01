@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Task {
+    pub app_name: Option<String>,
     pub app_id: Uuid,
     pub id: u64,
     pub tid: Option<u64>,
@@ -17,7 +18,7 @@ pub struct Task {
 
 impl Task {
     pub fn id(&self) -> String {
-        format!("{}.{}", self.app_id, self.id)
+        format!("{}.{}.{}",self.app_name.as_ref().unwrap(), self.app_id, self.id)
     }
 }
 
