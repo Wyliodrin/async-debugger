@@ -4,7 +4,7 @@ use console_api::tasks;
 use console_api::tasks::task::Kind;
 use uuid::Uuid;
 
-pub fn map_to_domain_task(app_id: Uuid, task: &tasks::Task) -> Option<Task> {
+pub fn map_to_domain_task(_app_id: Uuid, task: &tasks::Task) -> Option<Task> {
     let app_name = &task.location.clone().map(|value| value.to_string());
     let id = task.id.map(|value| value.id)?;
     let tid = read_field_value_u64(task, "task.id");
@@ -14,7 +14,6 @@ pub fn map_to_domain_task(app_id: Uuid, task: &tasks::Task) -> Option<Task> {
         .ok();
     Some(Task {
         app_name: app_name.clone(),
-        app_id,
         id,
         tid,
         name,

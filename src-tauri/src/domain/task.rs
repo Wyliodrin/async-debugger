@@ -4,12 +4,9 @@ use crate::mappers::read_file;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use uuid::Uuid;
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Task {
     pub app_name: Option<String>,
-    pub app_id: Uuid,
     pub id: u64,
     pub tid: Option<u64>,
     pub name: Option<String>,
@@ -18,7 +15,7 @@ pub struct Task {
 
 impl Task {
     pub fn id(&self) -> String {
-        format!("{}.{}.{}",self.app_name.as_ref().unwrap(), self.app_id, self.id)
+        format!("{}.{}",self.app_name.as_ref().unwrap(), self.id)
     }
 }
 

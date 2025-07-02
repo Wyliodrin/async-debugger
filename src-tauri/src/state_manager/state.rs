@@ -134,32 +134,24 @@ impl State {
     /// Receives a [`TaskUpdate`] object and applies the updates received
     /// on the current list of tasks
     pub async fn handle_task_update(&self, app_id: Uuid, task_update: TaskUpdate) {
-        if let Some((_uuid, app)) = self
-            .database
-            .applications_read()
-            .await
-            .iter()
-            .find(|(_uuid, app)| app.id().eq(&app_id))
-        {
-            if app.state() == ApplicationState::Disabled {
-                // If app is disabled we dont save anything
-                return;
-            }
-        } else {
-            warn!("Received a task update for an app that is not registered");
-            return;
-        }
+    let apps_map = self.database.applications_read().await;
+    if let Some(app) = apps_map.get(&app_id) {
+      if app.state() == ApplicationState::Disabled {
+        return;
+      }
 
-            // Saving new tasks
-            for task in task_update.new_tasks {
-                if let Some(task) = map_to_domain_task(app_id, &task) {
-                    info!("Received a new task for application with id {app_id}");
-                    self.database
-                        .tasks_write()
-                        .await
-                        .insert(task.id(), Arc::new(task));
-                }
-            }
+      // Saving new tasks
+      for raw in task_update.new_tasks {
+        if let Some(mut domain_task) = map_to_domain_task(app_id, &raw) {
+          domain_task.app_name = Some(app._title().to_string());
+
+          info!("Received a new task for app '{}' (id {})", app._title(), app_id);
+          self.database
+              .tasks_write()
+              .await
+              .insert(domain_task.id(), Arc::new(domain_task));
+        }
+      }
 
         // Saving dropped tasks
         for (tid, updated_task) in task_update.stats_update {
