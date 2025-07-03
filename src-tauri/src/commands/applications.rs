@@ -63,3 +63,12 @@ pub async fn disable_app(
 ) -> Result<(), Error> {
     state_manager.disable_application(uuid).await
 }
+
+#[tauri::command]
+pub async fn remove_task(
+  state_manager: State<'_, Arc<StateManager>>,
+  task_id: String,
+) -> Result<(), Error> {
+  state_manager.state.remove_task(&task_id).await;
+  Ok(())
+}

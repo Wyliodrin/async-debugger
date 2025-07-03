@@ -2,6 +2,7 @@ use super::connection_manager::{AppUpdate, Connection};
 use super::database::Database;
 use crate::common::get_pid_hosting_at;
 use crate::domain::application::{ApplicationState, ConnectionStatus};
+use crate::domain::TaskState;
 use crate::error::Error as TraceError;
 use crate::infra::guard::DataBaseWrite;
 use crate::infra::storage::Storage;
@@ -9,6 +10,7 @@ use crate::{
     domain::{application::Application, Task},
     mappers::tasks::map_to_domain_task,
 };
+use chrono::Utc;
 use console_api::tasks::TaskUpdate;
 use log::{debug, error, info, warn};
 use std::sync::Arc;
@@ -163,14 +165,24 @@ impl State {
 
             // Saving dropped tasks
             for (tid, updated_task) in task_update.stats_update {
-                if updated_task.dropped_at.is_some() {
-                    info!("A task was dropped for application {app_id}");
-                    let mut guard = self.database.tasks_write().await;
-                    guard.remove(&format!("{}.{}", app_id, tid));
+                  if updated_task.dropped_at.is_some() {
+                let key = format!("{}.{}", app_id, tid);
+                let mut tasks_guard = self.database.tasks_write().await;
+                if let Some(task_arc) = tasks_guard.get_mut(&key) {
+                // mark it Stopped if it was still Running
+                let task = Arc::make_mut(task_arc);
+                if matches!(task.state, TaskState::Running) {
+                    info!("Marking task {} as Stopped", key);
+                    task.state = TaskState::Stopped {
+                        at: Utc::now(),
+                        reason: None,
+                    };
                 }
+            }
             }
         }
     }
+        }
 
     /// Receives an update regarding an Application with the given [`app_id`]
     /// The update consists in the new Application object that needs to replace
@@ -214,5 +226,11 @@ impl State {
         self.database.tasks_read().await.values().cloned().collect()
     }
 
+    pub async fn remove_task(&self, task_id: &str) {
+        self.database.tasks_write().await.remove(task_id);
+    }
+
+
     // endregion
+    
 }

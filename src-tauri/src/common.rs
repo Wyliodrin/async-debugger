@@ -9,7 +9,6 @@ pub fn get_pid_hosting_at(url: Url) -> Option<u32> {
 
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
-        println!("linux");
         let output = Command::new("lsof")
             .args(["-ti", &format!(":{}", port)])
             .output()

@@ -73,6 +73,7 @@ pub async fn run() {
             commands::applications::delete_application,
             commands::applications::disable_app,
             commands::applications::enable_app,
+            commands::applications::remove_task,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
