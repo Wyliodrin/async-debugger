@@ -1,6 +1,4 @@
-use crate::error::Error as TraceError;
-use chrono::{DateTime, Local, TimeZone};
-use log::error;
+use chrono::{DateTime, Local};
 use std::process::Command;
 use sysinfo::{Pid, System};
 use url::Url;

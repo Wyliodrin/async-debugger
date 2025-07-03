@@ -15,7 +15,12 @@ export const useApplicationStore = defineStore('applications', () => {
                     id: uuid as string,
                     title: title,
                     url: url,
-                    state: 'Enabled'
+                    state: 'Enabled',
+                    processStatus: "",
+                    cpu_usage: 0.0,
+                    memory_usage: 0,
+                    pid: 0,
+                    startTime: '0'
                 });
             }
         ).catch(
@@ -45,7 +50,10 @@ export const useApplicationStore = defineStore('applications', () => {
     async function toggleAppState(appID: string) {
         const application = applications.value.find(item => item.id === appID);
         if (application) {
-            application.state = application.state === 'Enabled' ? 'Disabled' : 'Enabled';
+            application.state === 'Enabled'
+            ? (application.state = 'Disabled')
+            : (application.state = 'Enabled');
+
         }
     };
 

@@ -165,6 +165,11 @@ impl StateManager {
         self.state.disable_app(uuid).await
     }
 
+    pub async fn delete_application(&self, uuid: Uuid)-> Result<Uuid, TraceError>  {
+        self.state.delete_application(uuid).await;
+        Ok(uuid)
+    }
+
     /// Returns a list of the applications currently registered in the app
     /// (not necessarily active too)
     pub async fn _current_applications(&self) -> Vec<Arc<Application>> {
@@ -176,7 +181,7 @@ impl StateManager {
     //     self.state.delete_app(uuid).await
     // }
 
-    pub async fn update_app_connection_state(&self, app_id: Uuid, state: ConnectionStatus) {}
+    pub async fn update_app_connection_state(&self, _app_id: Uuid,_state: ConnectionStatus) {}
 
     // endregion
 

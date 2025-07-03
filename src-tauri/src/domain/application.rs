@@ -6,7 +6,7 @@ use crate::state_manager::connection_manager::{Command, Connection};
 use async_trait::async_trait;
 use chrono::{DateTime, Local};
 use log::debug;
-use serde::{de, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tauri::Url;
 use uuid::Uuid;
@@ -39,10 +39,8 @@ pub(crate) struct Application {
     start_time: DateTime<Local>,
     cpu_usage: f32,
     memory_usage: u64,
-
     state: ApplicationState,
     connection_status: ConnectionStatus,
-
     #[serde(skip)]
     connection: Option<Connection>,
 }

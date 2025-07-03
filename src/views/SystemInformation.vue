@@ -9,16 +9,12 @@ const applicationsStore = useApplicationStore();
 
 const applicationHeaders: any = ref([
     { title: "Name", align: 'center', key: 'title' },
-
     { title: "PID", align: 'center', key: 'pid'}, //
-
     { title: "URL", align: 'center', key: 'url' },
     { title: "State", align: 'center', key: 'state' },
-
-    { title: "Start Time", align: 'center', key: 'startTime' }, //
-    { title: "CPU", align: 'center', key: 'cpuUsage' }, // 
-    { title: "Memory", align: 'center', key: 'memoryUsage' }, //
-
+    { title: "Start Time", align: 'center', key: 'start_time' }, //
+    { title: "CPU", align: 'center', key: 'cpu_usage' }, // 
+    { title: "Memory", align: 'center', key: 'memory_usage' }, //
     { title: "Actions", align: 'center', key: 'actions', sortable: false }
 ]);
 
@@ -39,6 +35,12 @@ const getRowProps = (item: any) => {
 };
 
 const editedItem: Ref<{
+    pid: any;
+    state: any;
+    startTime: any;
+    cpu_usage: any;
+    memory_usage: any;
+    processStatus: any;
     id: string,
     title: string,
     url: string,
@@ -46,9 +48,21 @@ const editedItem: Ref<{
     id: '',
     title: '',
     url: '',
+    pid: '',
+    state: '',
+    startTime: '',
+    cpu_usage: '',
+    memory_usage: '',
+    processStatus: '',
 });
 
 const defaultItem: Ref<{
+    pid: any;
+    state: any;
+    startTime: any;
+    cpu_usage: any;
+    memory_usage: any;
+    processStatus: any;
     id: string,
     title: string,
     url: string,
@@ -56,6 +70,12 @@ const defaultItem: Ref<{
     id: '',
     title: '',
     url: '',
+    pid: '',
+    state: '',
+    startTime: '',
+    cpu_usage: '',
+    memory_usage: '',
+    processStatus: '',
 });
 
 const valid = ref(true);
@@ -78,10 +98,15 @@ function close() {
 
 async function save() {
     const currentApplication = {
+        pid: editedItem.value.pid,
         id: editedItem.value.id,
         title: editedItem.value.title,
         url: editedItem.value.url,
-        state: 'Enabled'
+        state: editedItem.value.state,
+        startTime: editedItem.value.startTime,
+        cpu_usage: editedItem.value.cpu_usage,
+        memory_usage: editedItem.value.memory_usage,
+        processStatus: editedItem.value.processStatus
     }
 
     if (editedIndex.value > -1) {
@@ -176,6 +201,11 @@ listen<Application[]>("update:applications", (event) => {
                         <div v-if="item.state === 'Enabled'">Enabled</div>
                         <div v-else>Disabled</div>
                     </v-chip>
+                </div>
+            </template>
+             <template v-slot:item.memory_usage="{ item }">
+                <div class="justify-center">
+                    {{ item.memory_usage }} MB
                 </div>
             </template>
             <template v-slot:item.actions="{ item }">

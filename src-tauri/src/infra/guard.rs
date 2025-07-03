@@ -1,5 +1,5 @@
 use crate::error::Error as TraceError;
-use log::{debug, error, info};
+use log::{error, info};
 use serde::Serialize;
 use std::{
     fmt::Debug,

@@ -227,7 +227,7 @@ impl ConnectionManager {
     async fn check_app_stats(pid: u32) -> Option<AppUpdate> {
         let mut sys = System::new_all();
         let cpu_count = sys.cpus().len();
-        println!("CPUS: {cpu_count}");
+        // println!("CPUS: {cpu_count}");
 
         sys.refresh_all();
         // Wait a bit because CPU usage is based on diff.

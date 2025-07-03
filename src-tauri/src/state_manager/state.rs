@@ -123,9 +123,13 @@ impl State {
         }
     }
 
-    pub async fn delete_app(&self, app_id: Uuid) {
+    pub async fn delete_application(&self, app_id: Uuid) {
         self.database.applications_write().await.remove(&app_id);
     }
+
+    // pub async fn edit_application(&self, app_id: Uuid) {
+        
+    // }
 
     // endregion
 
@@ -134,18 +138,18 @@ impl State {
     /// Receives a [`TaskUpdate`] object and applies the updates received
     /// on the current list of tasks
     pub async fn handle_task_update(&self, app_id: Uuid, task_update: TaskUpdate) {
-    let apps_map = self.database.applications_read().await;
-    if let Some(app) = apps_map.get(&app_id) {
-      if app.state() == ApplicationState::Disabled {
-        return;
-      }
+        if let Some(app) = self.database.applications_read().await.get(&app_id) {
+            if app.state() == ApplicationState::Disabled {
+                // If app is disabled we dont save anything
+                return;
+            }
 
       // Saving new tasks
       for raw in task_update.new_tasks {
         if let Some(mut domain_task) = map_to_domain_task(app_id, &raw) {
-          domain_task.app_name = Some(app._title().to_string());
+          domain_task.app_name = Some(app.title().to_string());
 
-          info!("Received a new task for app '{}' (id {})", app._title(), app_id);
+          info!("Received a new task for app '{}' (id {})", app.title(), app_id);
           self.database
               .tasks_write()
               .await
@@ -162,6 +166,7 @@ impl State {
             }
         }
     }
+}
 
     /// Receives an update regarding an Application with the given [`app_id`]
     /// The update consists in the new Application object that needs to replace
