@@ -108,6 +108,14 @@ impl Application {
         self.memory_usage = usage;
     }
 
+    pub fn _connection_status(&self) -> &ConnectionStatus {
+        &self.connection_status
+    }
+
+    pub fn set_connection_status(&mut self, conn_status: ConnectionStatus) {
+        self.connection_status = conn_status;
+    }
+
     // vreau sa vad info pentru aplicatia asta
     pub fn enable(&mut self, connection: Connection) {
         self.state = ApplicationState::Enabled;

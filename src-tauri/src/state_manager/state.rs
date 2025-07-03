@@ -1,7 +1,7 @@
 use super::connection_manager::{AppUpdate, Connection};
 use super::database::Database;
 use crate::common::get_pid_hosting_at;
-use crate::domain::application::ApplicationState;
+use crate::domain::application::{ApplicationState, ConnectionStatus};
 use crate::error::Error as TraceError;
 use crate::infra::guard::DataBaseWrite;
 use crate::infra::storage::Storage;
@@ -128,7 +128,7 @@ impl State {
     }
 
     // pub async fn edit_application(&self, app_id: Uuid) {
-        
+
     // }
 
     // endregion
@@ -144,29 +144,33 @@ impl State {
                 return;
             }
 
-      // Saving new tasks
-      for raw in task_update.new_tasks {
-        if let Some(mut domain_task) = map_to_domain_task(app_id, &raw) {
-          domain_task.app_name = Some(app.title().to_string());
+            // Saving new tasks
+            for raw in task_update.new_tasks {
+                if let Some(mut domain_task) = map_to_domain_task(app_id, &raw) {
+                    domain_task.app_name = Some(app.title().to_string());
 
-          info!("Received a new task for app '{}' (id {})", app.title(), app_id);
-          self.database
-              .tasks_write()
-              .await
-              .insert(domain_task.id(), Arc::new(domain_task));
-        }
-      }
+                    info!(
+                        "Received a new task for app '{}' (id {})",
+                        app.title(),
+                        app_id
+                    );
+                    self.database
+                        .tasks_write()
+                        .await
+                        .insert(domain_task.id(), Arc::new(domain_task));
+                }
+            }
 
-        // Saving dropped tasks
-        for (tid, updated_task) in task_update.stats_update {
-            if updated_task.dropped_at.is_some() {
-                info!("A task was dropped for application {app_id}");
-                let mut guard = self.database.tasks_write().await;
-                guard.remove(&format!("{}.{}", app_id, tid));
+            // Saving dropped tasks
+            for (tid, updated_task) in task_update.stats_update {
+                if updated_task.dropped_at.is_some() {
+                    info!("A task was dropped for application {app_id}");
+                    let mut guard = self.database.tasks_write().await;
+                    guard.remove(&format!("{}.{}", app_id, tid));
+                }
             }
         }
     }
-}
 
     /// Receives an update regarding an Application with the given [`app_id`]
     /// The update consists in the new Application object that needs to replace
@@ -183,6 +187,22 @@ impl State {
                     writeable_app.set_cpu_usage(cpu_usage);
                 }
                 writeable_app.set_memory_usage(update.memory_usage);
+            }
+        } else {
+            warn!("Received an application update for an app that is not registered");
+            return;
+        }
+    }
+
+    pub async fn handle_app_conn_update(&self, app_id: Uuid, conn_status: ConnectionStatus) {
+        let mut guard = self.database.applications_write().await;
+        if let Some((_uuid, app)) = guard.iter_mut().find(|(_uuid, app)| app.id().eq(&app_id)) {
+            if app.state() == ApplicationState::Disabled {
+                // If app is disabled we dont save anything
+                return;
+            } else {
+                let writeable_app = app.writeable();
+                writeable_app.set_connection_status(conn_status);
             }
         } else {
             warn!("Received an application update for an app that is not registered");

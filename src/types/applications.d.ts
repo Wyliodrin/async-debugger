@@ -1,7 +1,7 @@
 import { AppConnStatus } from "@/types/appConnStatus";
 
 export interface Application {
-  conn_status: AppConnStatus;
+  connection_status: string;
   state: string,
   pid: number;
   id: string;

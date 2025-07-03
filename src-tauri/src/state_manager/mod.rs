@@ -4,7 +4,6 @@ mod database;
 pub mod state;
 
 use crate::domain::application::{Application, ConnectionStatus};
-use crate::domain::command_ui::CommandUI;
 use crate::error::Error as TraceError;
 use crate::state_manager::connection_manager::Connection;
 use crate::state_manager::state::State;
@@ -13,7 +12,7 @@ use connection_manager::{ConnectionManager, Event};
 use log::{debug, error, info};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter as _};
-use tokio::sync::mpsc::{self, Receiver, Sender};
+use tokio::sync::mpsc::{self, Receiver};
 use url::Url;
 use uuid::Uuid;
 
@@ -65,11 +64,7 @@ impl StateManager {
 
     // region events
 
-    pub async fn run(
-        &self,
-        mut updates_receiver: Receiver<(Uuid, Event)>,
-        ui_tx: Sender<CommandUI>,
-    ) {
+    pub async fn run(&self, mut updates_receiver: Receiver<(Uuid, Event)>) {
         self.reconnect_all_apps().await;
 
         // event loop
@@ -81,54 +76,35 @@ impl StateManager {
                         Event::TaskUpdate(update) => {
                             if let Some(task_update) = update.task_update {
                                 self.state.handle_task_update(app_id, task_update).await;
-
-                                let ui_tx_clone = ui_tx.clone();
-                                if ui_tx_clone.send(CommandUI::UpdateTasks).await.is_err() {
-                                    eprintln!("connection task shutdown");
-                                    return;
-                                }
                             }
-                        }
+                        },
+
                         Event::ApplicationUpdated(update) => {
                             self.state.handle_app_update(app_id, update).await;
+                        },
 
-                            let ui_tx_clone = ui_tx.clone();
-                            if ui_tx_clone.send(CommandUI::UpdateApplications).await.is_err() {
-                                eprintln!("connection task shutdown");
-                                return;
-                            }
-                        }
                         Event::Connecting => {
-                            let ui_tx_clone = ui_tx.clone();
-                            if ui_tx_clone.send(CommandUI::TryingToConnect{app_id}).await.is_err() {
-                                eprintln!("connection task shutdown");
-                                return;
-                            }
-                        }
+                            println!("Connecting..");
+                            self.state.handle_app_conn_update(app_id, ConnectionStatus::Connecting).await;
+                        },
+
                         Event::Connected {} => {
                             println!("Connected");
-                            let ui_tx_clone = ui_tx.clone();
-                            if ui_tx_clone.send(CommandUI::Connected{app_id}).await.is_err() {
-                                eprintln!("connection task shutdown");
-                                return;
-                            }
+                            self.state.handle_app_conn_update(app_id, ConnectionStatus::Connected).await;
                         },
+
                         Event::Disconnected => {
                             println!("Disconnedted app");
-                            self.update_app_connection_state(app_id, ConnectionStatus::Disconnected).await;
+                            self.state.handle_app_conn_update(app_id, ConnectionStatus::Disconnected).await;
                         },
-                        Event::Error(err) => {
-                            println!("Error with app connection: {err:?}");
 
-                            let ui_tx_clone = ui_tx.clone();
-                            if ui_tx_clone.send(CommandUI::FailedConnection{app_id}).await.is_err() {
-                                eprintln!("connection task shutdown");
-                                return;
-                            }
-                            self.update_app_connection_state(app_id, ConnectionStatus::Error(err.to_string())).await;
-                        },
+                        Event::Error(err) => {
+                            println!("dadadada");
+                            println!("Error with app connection: {err:?}");
+                            self.state.handle_app_conn_update(app_id, ConnectionStatus::Error(err.to_string())).await;
+                        }
                     }
-                },
+                }
 
                 // TODO: add other events receivers
                 // TODO: add receiver to add application and send to connection manager then update state
@@ -217,9 +193,6 @@ impl StateManager {
     //     self.state.delete_app(uuid).await
     // }
 
-    // ce ar trebui sa faca
-    pub async fn update_app_connection_state(&self, _app_id: Uuid, _state: ConnectionStatus) {}
-
     // endregion
 
     // region UPDATES
@@ -232,18 +205,6 @@ impl StateManager {
     pub async fn emit_update_applications(&self, app_handle: &AppHandle) {
         let elements = self.state.get_current_applications_list().await;
         app_handle.emit("update:applications", elements).ok();
-    }
-
-    pub async fn emit_trying_to_connect(&self, app_handle: &AppHandle, app_id: Uuid) {
-        app_handle.emit("connection:trying", app_id).ok();
-    }
-
-    pub async fn emit_connected_succesfully(&self, app_handle: &AppHandle, app_id: Uuid) {
-        app_handle.emit("connection:succesfully", app_id).ok();
-    }
-
-    pub async fn emit_failed_connection(&self, app_handle: &AppHandle, app_id: Uuid) {
-        app_handle.emit("connection:failed", app_id).ok();
     }
 
     // pub async fn emit_connection_update(&self, app_id: )
