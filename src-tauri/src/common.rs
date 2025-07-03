@@ -41,17 +41,17 @@ pub fn get_pid_hosting_at(url: Url) -> Option<u32> {
     }
 }
 
-pub fn get_process_start_time(pid: u32) -> Option<DateTime<Local>> {
+pub fn get_process_start_time(pid: u32) -> Option<String> {
     let mut sys = System::new_all();
 
     // First we update all information of our `System` struct.
     sys.refresh_all();
 
     if let Some(process) = sys.process(Pid::from_u32(pid)) {
-        let date: DateTime<Local> = DateTime::from_timestamp(process.start_time() as i64, 0)
+        let date: String = DateTime::from_timestamp(process.start_time() as i64, 0)
             .unwrap()
-            .with_timezone(&Local);
-
+            .format("%d/%m/%Y %H:%M").to_string();
+        println!("{}", date);
         return Some(date);
     }
 

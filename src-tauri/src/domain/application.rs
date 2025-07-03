@@ -36,7 +36,7 @@ pub(crate) struct Application {
     id: Uuid,
     title: String,
     url: Url,
-    start_time: DateTime<Local>,
+    start_time: String,
     cpu_usage: f32,
     memory_usage: u64,
     state: ApplicationState,

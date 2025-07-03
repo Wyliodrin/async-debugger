@@ -4,12 +4,13 @@ import { Application } from '@/types/applications';
 import { computed, Ref, ref } from 'vue';
 import { PlayerPlayFilledIcon, PlayerPauseFilledIcon, PencilIcon, TrashIcon, PlusIcon } from 'vue-tabler-icons';
 import { listen } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
 
 const applicationsStore = useApplicationStore();
 
 const applicationHeaders: any = ref([
     { title: "Name", align: 'center', key: 'title' },
-    { title: "PID", align: 'center', key: 'pid'}, //
+    { title: "PID", align: 'center', key: 'pid' }, //
     { title: "URL", align: 'center', key: 'url' },
     { title: "State", align: 'center', key: 'state' },
     { title: "Start Time", align: 'center', key: 'start_time' }, //
@@ -143,6 +144,20 @@ listen<Application[]>("update:applications", (event) => {
     console.log("Received applications: " + JSON.stringify(event.payload[0]));
 });
 
+async function toggleAppState(app: Application) {
+    try {
+        if (app.state === "Enabled") {
+            await invoke("disable_app", { uuid: app.id });
+            app.state = "Disabled";
+        } else {
+            await invoke("enable_app", { uuid: app.id });
+            app.state = "Enabled";
+        }
+    } catch (e) {
+        console.error("toggleAppState failed", e);
+    }
+}
+
 </script>
 
 <template>
@@ -203,40 +218,34 @@ listen<Application[]>("update:applications", (event) => {
                     </v-chip>
                 </div>
             </template>
-             <template v-slot:item.memory_usage="{ item }">
+            <template v-slot:item.memory_usage="{ item }">
                 <div class="justify-center">
                     {{ item.memory_usage }} MB
                 </div>
             </template>
             <template v-slot:item.actions="{ item }">
-                <div class="d-flex justify-center gap-2">
-                    <v-tooltip :text="item.state === 'Disabled' ? 'Enable' : 'Disable'">
-                        <template v-slot:activator="{ props }">
-                            <v-btn icon flat @click="applicationsStore.toggleAppState(item.id)" v-bind="props"
-                                :class="item.state === 'Disabled' ? 'disabled-action-btn' : ''">
-                                <PlayerPlayFilledIcon v-if="item.state === 'Disabled'" stroke-width="1.5" size="20"
-                                    class="text-primary" />
-                                <PlayerPauseFilledIcon v-else stroke-width="1.5" size="20" class="text-primary" />
-                            </v-btn>
-                        </template>
-                    </v-tooltip>
-                    <v-tooltip text="Edit">
-                        <template v-slot:activator="{ props }">
-                            <v-btn icon flat @click="editApp(item)" v-bind="props"
-                                :class="item.state === 'Disabled' ? 'disabled-action-btn' : ''">
-                                <PencilIcon stroke-width="1.5" size="20" class="text-primary" />
-                            </v-btn>
-                        </template>
-                    </v-tooltip>
-                    <v-tooltip text="Delete">
-                        <template v-slot:activator="{ props }">
-                            <v-btn icon flat @click="deleteApp(item.id)" v-bind="props"
-                                :class="item.state === 'Disabled' ? 'disabled-action-btn' : ''">
-                                <TrashIcon stroke-width="1.5" size="20" class="text-error" />
-                            </v-btn>
-                        </template>
-                    </v-tooltip>
-                </div>
+                <v-btn icon flat @click="toggleAppState(item)"
+                    :class="item.state === 'Disabled' ? 'disabled-action-btn' : ''">
+                    <PlayerPlayFilledIcon v-if="item.state === 'Disabled'" stroke-width="1.5" size="20"
+                        class="text-primary" />
+                    <PlayerPauseFilledIcon v-else stroke-width="1.5" size="20" class="text-primary" />
+                </v-btn>
+                <v-tooltip text="Edit">
+                    <template v-slot:activator="{ props }">
+                        <v-btn icon flat @click="editApp(item)" v-bind="props"
+                            :class="item.state === 'Disabled' ? 'disabled-action-btn' : ''">
+                            <PencilIcon stroke-width="1.5" size="20" class="text-primary" />
+                        </v-btn>
+                    </template>
+                </v-tooltip>
+                <v-tooltip text="Delete">
+                    <template v-slot:activator="{ props }">
+                        <v-btn icon flat @click="deleteApp(item.id)" v-bind="props"
+                            :class="item.state === 'Disabled' ? 'disabled-action-btn' : ''">
+                            <TrashIcon stroke-width="1.5" size="20" class="text-error" />
+                        </v-btn>
+                    </template>
+                </v-tooltip>
             </template>
         </v-data-table>
     </v-card>

@@ -47,17 +47,18 @@ export const useApplicationStore = defineStore('applications', () => {
     }
 
     // TODO cheama din functiile Amaliei
-    async function toggleAppState(appID: string) {
-        const application = applications.value.find(item => item.id === appID);
-        if (application) {
-            application.state === 'Enabled'
-            ? (application.state = 'Disabled')
-            : (application.state = 'Enabled');
+    // async function toggleAppState(appID: string) {
+    //     const application = applications.value.find(item => item.id === appID);
+    //     if (application) {
+    //         application.state === 'Enabled'
+    //         ? (application.state = 'Disabled')
+    //         : (application.state = 'Enabled');
 
-        }
-    };
+    //     }
+    // };
 
     return {
-        applications, getApplications, addApplication, deleteApplication, editApplication, toggleAppState
+        applications, getApplications, addApplication, deleteApplication, editApplication,
+        // toggleAppState
     }
 });

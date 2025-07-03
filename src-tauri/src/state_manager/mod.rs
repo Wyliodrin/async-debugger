@@ -5,6 +5,7 @@ pub mod state;
 
 use crate::domain::application::{Application, ConnectionStatus};
 use crate::error::Error as TraceError;
+use crate::state_manager::connection_manager::Connection;
 use crate::state_manager::state::State;
 use anyhow::Result;
 use connection_manager::{ConnectionManager, Event};
@@ -169,6 +170,14 @@ impl StateManager {
         self.state.delete_application(uuid).await;
         Ok(uuid)
     }
+
+    pub async fn enable_application(
+    &self,
+    uuid: Uuid,
+    connection: Connection,
+) {
+    self.state.enable_app(uuid, connection).await
+}
 
     /// Returns a list of the applications currently registered in the app
     /// (not necessarily active too)
