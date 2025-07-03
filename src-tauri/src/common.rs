@@ -7,18 +7,38 @@ pub fn get_pid_hosting_at(url: Url) -> Option<u32> {
     let port = url.port()?;
     println!("Port: {}", port);
 
-    let output = Command::new("lsof")
-        .args(["-ti", &format!(":{}", port)])
-        .output()
-        .ok()?;
+    #[cfg(all(target_os = "linux", target_os = "macos"))]
+    {
+        let output = Command::new("lsof")
+            .args(["-ti", &format!(":{}", port)])
+            .output()
+            .ok()?;
 
-    if output.stdout.is_empty() {
-        // No process hosting on the specified url has been found
-        return None;
+        if output.stdout.is_empty() {
+            // No process hosting on the specified url has been found
+            return None;
+        }
+
+        let output_str = String::from_utf8_lossy(&output.stdout);
+        output_str.trim().parse().ok()
     }
+    #[cfg(target_os = "windows")]
+    {
+        let output = Command::new("netstat").args(["-ano"]).output().ok()?;
 
-    let output_str = String::from_utf8_lossy(&output.stdout);
-    output_str.trim().parse().ok()
+        let stdout = String::from_utf8_lossy(&output.stdout);
+
+        for line in stdout.lines() {
+            if line.contains(&format!(":{}", port)) {
+                if let Some(pid_str) = line.split_whitespace().last() {
+                    if let Ok(pid) = pid_str.parse::<u32>() {
+                        return Some(pid);
+                    }
+                }
+            }
+        }
+        None
+    }
 }
 
 pub fn get_process_start_time(pid: u32) -> Option<DateTime<Local>> {
