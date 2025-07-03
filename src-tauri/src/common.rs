@@ -51,8 +51,8 @@ pub fn get_process_start_time(pid: u32) -> Option<String> {
     if let Some(process) = sys.process(Pid::from_u32(pid)) {
         let date: String = DateTime::from_timestamp(process.start_time() as i64, 0)
             .unwrap()
-            .format("%d/%m/%Y %H:%M:%S").to_string();
-        println!("{}", date);
+            .format("%d/%m/%Y %H:%M:%S")
+            .to_string();
         return Some(date);
     }
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useApplicationStore } from '@/stores/application';
 import { Application } from '@/types/applications';
+import { AppConnStatus } from '@/types/appConnStatus';
 import { computed, Ref, ref } from 'vue';
 import { PlayerPlayFilledIcon, PlayerPauseFilledIcon, PencilIcon, TrashIcon, PlusIcon } from 'vue-tabler-icons';
 import { listen } from '@tauri-apps/api/event';
@@ -9,6 +10,7 @@ import { invoke } from '@tauri-apps/api/core';
 const applicationsStore = useApplicationStore();
 
 const applicationHeaders: any = ref([
+    { title: "Status", align: 'center', key: 'conn_status'},
     { title: "Name", align: 'center', key: 'title' },
     { title: "PID", align: 'center', key: 'pid' }, //
     { title: "URL", align: 'center', key: 'url' },
@@ -36,6 +38,7 @@ const getRowProps = (item: any) => {
 };
 
 const editedItem: Ref<{
+    conn_status: AppConnStatus,
     pid: any;
     state: any;
     startTime: any;
@@ -46,6 +49,7 @@ const editedItem: Ref<{
     title: string,
     url: string,
 }> = ref({
+    conn_status: AppConnStatus.Loading,
     id: '',
     title: '',
     url: '',
@@ -58,6 +62,7 @@ const editedItem: Ref<{
 });
 
 const defaultItem: Ref<{
+    conn_status: AppConnStatus,
     pid: any;
     state: any;
     startTime: any;
@@ -68,6 +73,7 @@ const defaultItem: Ref<{
     title: string,
     url: string,
 }> = ref({
+    conn_status: AppConnStatus.Loading,
     id: '',
     title: '',
     url: '',
@@ -99,6 +105,7 @@ function close() {
 
 async function save() {
     const currentApplication = {
+        conn_status: editedItem.value.conn_status,
         pid: editedItem.value.pid,
         id: editedItem.value.id,
         title: editedItem.value.title,
@@ -140,9 +147,43 @@ function editApp(app: Application) {
 }
 
 listen<Application[]>("update:applications", (event) => {
-    applicationsStore.applications = event.payload;
     console.log("Received applications: " + JSON.stringify(event.payload[0]));
+    event.payload.forEach(newApp => {
+        const existingApp = applicationsStore.applications.find(app => app.id === newApp.id);
+        if (existingApp) {
+            Object.assign(existingApp, newApp);
+        } else {
+            applicationsStore.applications.push(newApp);
+        }
+    });
 });
+
+listen("connection:trying", (event) => {
+    let app_id = event.payload;
+    let applications = applicationsStore.getApplications.value;
+    const application = applications.find(item => item.id === app_id);
+    if (application){
+        application.conn_status = AppConnStatus.Loading;
+    }
+})
+
+listen("connection:succesfully", (event) => {
+    let app_id = event.payload;
+    let applications = applicationsStore.getApplications.value;
+    const application = applications.find(item => item.id === app_id);
+    if (application){
+        application.conn_status = AppConnStatus.Ready;
+    }
+})
+
+listen("connection:failed", (event) => {
+    let app_id = event.payload;
+    let applications = applicationsStore.getApplications.value;
+    const application = applications.find(item => item.id === app_id);
+    if (application){
+        application.conn_status = AppConnStatus.Error;
+    }
+})
 
 async function toggleAppState(app: Application) {
     try {
@@ -210,6 +251,16 @@ async function toggleAppState(app: Application) {
 
         <v-data-table :search="applications" :headers="applicationHeaders"
             :items="applicationsStore.getApplications.value" :row-props="getRowProps">
+            <template v-slot:item.conn_status="{ item }">
+                <v-progress-circular
+                    v-if="item.conn_status == AppConnStatus.Loading"
+                    indeterminate
+                    color="primary"
+                    size="24"
+                />
+                <v-icon v-else-if="item.conn_status == AppConnStatus.Ready" color="green">mdi-check-circle</v-icon>
+                <v-icon v-else color="red">mdi-alert-circle</v-icon>
+            </template>
             <template v-slot:item.state="{ item }">
                 <div class="justify-center">
                     <v-chip :color="getStateChipColor(item.state)" class="text-uppercase" label size="small">

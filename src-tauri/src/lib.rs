@@ -6,10 +6,14 @@ mod infra;
 mod mappers;
 mod state_manager;
 
+use domain::command_ui::CommandUI;
 use state_manager::StateManager;
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 use tauri::{async_runtime, Manager};
-use tokio::{task, time::sleep};
+use tokio::{
+    sync::mpsc::{self, Sender},
+    task,
+};
 
 pub async fn run() {
     // Load context
@@ -22,8 +26,12 @@ pub async fn run() {
 
     // Start job
     let state_manager = shared_state.clone();
+
+    let (ui_tx, mut ui_rx) = mpsc::channel(100);
+    let ui_tx_clone: Sender<CommandUI> = ui_tx.clone();
+
     task::spawn(async move {
-        state_manager.run(updates_receiver).await;
+        state_manager.run(updates_receiver, ui_tx_clone).await;
     });
 
     // Clone for ui_updates
@@ -47,10 +55,30 @@ pub async fn run() {
             // update ui once per second
             // TODO could be improved
             async_runtime::spawn(async move {
-                loop {
-                    sleep(Duration::from_secs(1)).await;
-                    ui_state_manager.emit_update_applications(&app_handle).await;
-                    ui_state_manager.emit_update_tasks(&app_handle).await;
+                while let Some(command) = ui_rx.recv().await {
+                    match command {
+                        CommandUI::UpdateApplications => {
+                            ui_state_manager.emit_update_applications(&app_handle).await;
+                        }
+                        CommandUI::UpdateTasks => {
+                            ui_state_manager.emit_update_tasks(&app_handle).await;
+                        }
+                        CommandUI::TryingToConnect { app_id } => {
+                            ui_state_manager
+                                .emit_trying_to_connect(&app_handle, app_id)
+                                .await;
+                        }
+                        CommandUI::Connected { app_id } => {
+                            ui_state_manager
+                                .emit_connected_succesfully(&app_handle, app_id)
+                                .await;
+                        }
+                        CommandUI::FailedConnection { app_id } => {
+                            ui_state_manager
+                                .emit_failed_connection(&app_handle, app_id)
+                                .await;
+                        }
+                    }
                 }
             });
 
