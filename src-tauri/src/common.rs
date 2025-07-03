@@ -7,8 +7,9 @@ pub fn get_pid_hosting_at(url: Url) -> Option<u32> {
     let port = url.port()?;
     println!("Port: {}", port);
 
-    #[cfg(all(target_os = "linux", target_os = "macos"))]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
+        println!("linux");
         let output = Command::new("lsof")
             .args(["-ti", &format!(":{}", port)])
             .output()
@@ -50,7 +51,7 @@ pub fn get_process_start_time(pid: u32) -> Option<String> {
     if let Some(process) = sys.process(Pid::from_u32(pid)) {
         let date: String = DateTime::from_timestamp(process.start_time() as i64, 0)
             .unwrap()
-            .format("%d/%m/%Y %H:%M").to_string();
+            .format("%d/%m/%Y %H:%M:%S").to_string();
         println!("{}", date);
         return Some(date);
     }
