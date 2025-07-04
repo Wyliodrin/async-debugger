@@ -20,7 +20,8 @@ export const useApplicationStore = defineStore('applications', () => {
                     cpu_usage: 0.0,
                     memory_usage: 0,
                     pid: 0,
-                    startTime: '0'
+                    startTime: '0',
+                    connection_status: ""
                 });
             }
         ).catch(

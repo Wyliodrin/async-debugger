@@ -69,6 +69,7 @@ pub async fn remove_task(
   state_manager: State<'_, Arc<StateManager>>,
   task_id: String,
 ) -> Result<(), Error> {
-  state_manager.state.remove_task(&task_id).await;
+  state_manager.state.stop_task(&task_id).await;
   Ok(())
 }
+

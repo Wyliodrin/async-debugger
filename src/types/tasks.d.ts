@@ -4,4 +4,5 @@ export type Task = {
     tid?: number;
     name?: string;
     kind: string;
+    state: string;
 };

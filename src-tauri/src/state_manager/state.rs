@@ -10,7 +10,7 @@ use crate::{
     domain::{application::Application, Task},
     mappers::tasks::map_to_domain_task,
 };
-use chrono::Utc;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use console_api::tasks::TaskUpdate;
 use log::{debug, error, info, warn};
 use std::sync::Arc;
@@ -224,6 +224,23 @@ impl State {
     }
 
     pub async fn handle_app_conn_update(&self, app_id: Uuid, conn_status: ConnectionStatus) {
+        if matches!(conn_status, ConnectionStatus::Disconnected)
+            || matches!(conn_status, ConnectionStatus::Error(_))
+        {
+            let mut tasks_guard = self.database.tasks_write().await;
+            let prefix = format!("{}.", app_id);
+            for (key, task_arc) in tasks_guard.iter_mut() {
+                if key.starts_with(&prefix) {
+                    let t = Arc::make_mut(task_arc);
+                    if matches!(t.state, TaskState::Running) {
+                        t.state = TaskState::Stopped {
+                            at: Utc::now(),
+                            reason: None,
+                        };
+                    }
+                }
+            }
+        }
         let mut guard = self.database.applications_write().await;
         if let Some((_uuid, app)) = guard.iter_mut().find(|(_uuid, app)| app.id().eq(&app_id)) {
             if app.state() == ApplicationState::Disabled {
