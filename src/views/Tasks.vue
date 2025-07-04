@@ -36,8 +36,6 @@ listen<Task[]>("update:tasks", (event) => {
     console.log("Afisez task " + JSON.stringify(tasks.value[0]));
 });
 
-// You can leave stopTask defined if you still need it elsewhere,
-// or remove it completely if unused.
 </script>
 
 <template>
@@ -61,7 +59,6 @@ listen<Task[]>("update:tasks", (event) => {
                     </v-chip>
                 </template>
 
-                <!-- Deleted the entire item.actions block -->
             </v-data-table>
         </v-card-text>
     </v-card>
