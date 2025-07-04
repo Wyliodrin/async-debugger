@@ -1,4 +1,4 @@
-use chrono::{DateTime, Local};
+use chrono::DateTime;
 use std::process::Command;
 use sysinfo::{Pid, System};
 use url::Url;

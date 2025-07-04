@@ -4,7 +4,6 @@ use crate::error::Error as TraceError;
 use crate::mappers::read_file;
 use crate::state_manager::connection_manager::{Command, Connection};
 use async_trait::async_trait;
-use chrono::{DateTime, Local};
 use log::debug;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

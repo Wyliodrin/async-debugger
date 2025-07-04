@@ -10,7 +10,7 @@ use crate::{
     domain::{application::Application, Task},
     mappers::tasks::map_to_domain_task,
 };
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::Utc;
 use console_api::tasks::TaskUpdate;
 use log::{debug, error, info, warn};
 use std::sync::Arc;
