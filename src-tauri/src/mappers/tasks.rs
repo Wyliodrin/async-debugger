@@ -23,8 +23,6 @@ pub fn map_to_domain_task(_app_id: Uuid, task: &tasks::Task) -> Option<Task> {
         tid,
         name,
         kind,
-
-        // new:
         state: TaskState::Running,
     })
 }

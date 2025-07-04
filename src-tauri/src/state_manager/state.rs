@@ -10,7 +10,7 @@ use crate::{
     domain::{application::Application, Task},
     mappers::tasks::map_to_domain_task,
 };
-use chrono::Utc;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use console_api::tasks::TaskUpdate;
 use log::{debug, error, info, warn};
 use std::sync::Arc;
@@ -164,25 +164,38 @@ impl State {
             }
 
             // Saving dropped tasks
+            let mut tasks_guard = self.database.tasks_write().await;
             for (tid, updated_task) in task_update.stats_update {
-                  if updated_task.dropped_at.is_some() {
-                let key = format!("{}.{}", app_id, tid);
-                let mut tasks_guard = self.database.tasks_write().await;
-                if let Some(task_arc) = tasks_guard.get_mut(&key) {
-                // mark it Stopped if it was still Running
-                let task = Arc::make_mut(task_arc);
-                if matches!(task.state, TaskState::Running) {
-                    info!("Marking task {} as Stopped", key);
-                    task.state = TaskState::Stopped {
-                        at: Utc::now(),
-                        reason: None,
-                    };
+                if updated_task.dropped_at.is_some() {
+                    let key = format!("{}", tid);
+                    println!("{}", key);
+                    if let Some(task_arc) = tasks_guard.get_mut(&key) {
+                        let task = Arc::make_mut(task_arc);
+                        if matches!(task.state, TaskState::Running)
+                            && (updated_task.dropped_at.is_some()
+                                || updated_task.dropped_at.is_some())
+                        {
+                            task.state = TaskState::Stopped {
+                                at: updated_task
+                                    // turn the Option<prost_types::Timestamp> into Option<DateTime<Utc>>
+                                    .dropped_at
+                                    .or(updated_task.dropped_at)
+                                    .map(|ts| {
+                                        let naive = NaiveDateTime::from_timestamp(
+                                            ts.seconds,
+                                            ts.nanos as u32,
+                                        );
+                                        DateTime::<Utc>::from_utc(naive, Utc)
+                                    })
+                                    .unwrap_or_else(|| Utc::now()),
+                                reason: None,
+                            };
+                        }
+                    }
                 }
-            }
             }
         }
     }
-        }
 
     /// Receives an update regarding an Application with the given [`app_id`]
     /// The update consists in the new Application object that needs to replace
@@ -207,6 +220,23 @@ impl State {
     }
 
     pub async fn handle_app_conn_update(&self, app_id: Uuid, conn_status: ConnectionStatus) {
+        if matches!(conn_status, ConnectionStatus::Disconnected)
+            || matches!(conn_status, ConnectionStatus::Error(_))
+        {
+            let mut tasks_guard = self.database.tasks_write().await;
+            let prefix = format!("{}.", app_id);
+            for (key, task_arc) in tasks_guard.iter_mut() {
+                if key.starts_with(&prefix) {
+                    let t = Arc::make_mut(task_arc);
+                    if matches!(t.state, TaskState::Running) {
+                        t.state = TaskState::Stopped {
+                            at: Utc::now(),
+                            reason: None,
+                        };
+                    }
+                }
+            }
+        }
         let mut guard = self.database.applications_write().await;
         if let Some((_uuid, app)) = guard.iter_mut().find(|(_uuid, app)| app.id().eq(&app_id)) {
             if app.state() == ApplicationState::Disabled {
@@ -226,11 +256,18 @@ impl State {
         self.database.tasks_read().await.values().cloned().collect()
     }
 
-    pub async fn remove_task(&self, task_id: &str) {
-        self.database.tasks_write().await.remove(task_id);
+    pub async fn stop_task(&self, task_id: &str) {
+        let mut tasks = self.database.tasks_write().await;
+        if let Some(task_arc) = tasks.get_mut(task_id) {
+            let task = Arc::make_mut(task_arc);
+            if matches!(task.state, TaskState::Running) {
+                task.state = TaskState::Stopped {
+                    at: Utc::now(),
+                    reason: None,
+                };
+            }
+        }
     }
 
-
     // endregion
-    
 }
