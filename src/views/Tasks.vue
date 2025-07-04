@@ -31,10 +31,21 @@ function getTaskChipColor(stateOrKind: string): string {
     }
 };
 
-listen<Task[]>("update:tasks", (event) => {
-    tasks.value = event.payload;
+listen<any[]>("update:tasks", (e) => {
+    tasks.value = e.payload.map((t: any) => {
+        if (typeof t.state === "string") {
+            return { ...t, state: t.state }
+        }
+        const keys = Object.keys(t.state ?? {})
+        const stateKey = keys.length ? keys[0] : "Unknown"
+
+        return {
+            ...t,
+            state: stateKey
+        }
+    })
     console.log("Afisez task " + JSON.stringify(tasks.value[0]));
-});
+})
 
 </script>
 
