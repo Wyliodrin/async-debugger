@@ -99,7 +99,6 @@ impl StateManager {
                         },
 
                         Event::Error(err) => {
-                            println!("dadadada");
                             println!("Error with app connection: {err:?}");
                             self.state.handle_app_conn_update(app_id, ConnectionStatus::Error(err.to_string())).await;
                         }

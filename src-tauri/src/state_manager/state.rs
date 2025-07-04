@@ -150,7 +150,6 @@ impl State {
             for raw in task_update.new_tasks {
                 if let Some(mut domain_task) = map_to_domain_task(app_id, &raw) {
                     domain_task.app_name = Some(app.title().to_string());
-
                     info!(
                         "Received a new task for app '{}' (id {})",
                         app.title(),
@@ -163,26 +162,44 @@ impl State {
                 }
             }
 
-            // Saving dropped tasks
+            // Updating tasks
+            let mut tasks_guard = self.database.tasks_write().await;
             for (tid, updated_task) in task_update.stats_update {
-                  if updated_task.dropped_at.is_some() {
-                let key = format!("{}.{}", app_id, tid);
-                let mut tasks_guard = self.database.tasks_write().await;
-                if let Some(task_arc) = tasks_guard.get_mut(&key) {
-                // mark it Stopped if it was still Running
-                let task = Arc::make_mut(task_arc);
-                if matches!(task.state, TaskState::Running) {
-                    info!("Marking task {} as Stopped", key);
-                    task.state = TaskState::Stopped {
-                        at: Utc::now(),
-                        reason: None,
-                    };
+                if updated_task.dropped_at.is_some() {
+                    let key = format!("{}.{}", app.url(), tid);
+                    if let Some(task_arc) = tasks_guard.get_mut(&key) {
+                        // mark it Stopped if it was still Running
+                        let task = Arc::make_mut(task_arc);
+                        if matches!(task.state, TaskState::Running) {
+                            info!("Marking task {} as Stopped", key);
+                            task.state = TaskState::Stopped {
+                                at: Utc::now(),
+                                reason: None,
+                            };
+                        }
+                    }
                 }
-            }
+
+                let poll_stats = updated_task.poll_stats;
+                match poll_stats {
+                    Some(stat) => {
+                        let key = format!("{}.{}", app.url(), tid);
+                        if let Some(task_arc) = tasks_guard.get_mut(&key) {
+                            let task = Arc::make_mut(task_arc);
+                            if let Some(dur) = stat.busy_time {
+                                task.busy = Some(dur.seconds.to_string());
+                            } else {
+                                task.busy = None;
+                            }
+                        }
+                    }
+                    None => {
+                        println!("test");
+                    }
+                }
             }
         }
     }
-        }
 
     /// Receives an update regarding an Application with the given [`app_id`]
     /// The update consists in the new Application object that needs to replace
@@ -230,7 +247,5 @@ impl State {
         self.database.tasks_write().await.remove(task_id);
     }
 
-
     // endregion
-    
 }

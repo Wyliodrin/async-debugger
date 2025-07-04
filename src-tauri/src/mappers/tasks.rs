@@ -5,10 +5,7 @@ use console_api::tasks::task::Kind;
 use uuid::Uuid;
 
 pub fn map_to_domain_task(_app_id: Uuid, task: &tasks::Task) -> Option<Task> {
-    let app_name = task
-        .location
-        .as_ref()
-        .map(|loc| loc.to_string());
+    let app_name = task.location.as_ref().map(|loc| loc.to_string());
 
     let id = task.id.as_ref().map(|v| v.id)?;
     let tid = read_field_value_u64(task, "task.id");
@@ -16,6 +13,7 @@ pub fn map_to_domain_task(_app_id: Uuid, task: &tasks::Task) -> Option<Task> {
     let kind = Kind::try_from(task.kind)
         .map(|k| k.as_str_name().to_owned())
         .ok();
+    let location = task.location.as_ref().map(|k| k.to_string());
 
     Some(Task {
         app_name,
@@ -23,8 +21,12 @@ pub fn map_to_domain_task(_app_id: Uuid, task: &tasks::Task) -> Option<Task> {
         tid,
         name,
         kind,
-
         // new:
         state: TaskState::Running,
+        runtime: Some("10".into()),
+        scheduled: Some("10".into()),
+        idle: Some("10".into()),
+        busy: None,
+        location,
     })
 }

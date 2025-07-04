@@ -8,11 +8,11 @@ use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum TaskState {
-  Running,
-  Stopped {
-    at: DateTime<Utc>,
-    reason: Option<String>,
-  },
+    Running,
+    Stopped {
+        at: DateTime<Utc>,
+        reason: Option<String>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -23,6 +23,11 @@ pub struct Task {
     pub name: Option<String>,
     pub kind: Option<String>,
     pub state: TaskState,
+    pub runtime: Option<String>,
+    pub scheduled: Option<String>,
+    pub idle: Option<String>,
+    pub busy: Option<String>,
+    pub location: Option<String>,
 }
 
 impl Task {
@@ -37,8 +42,7 @@ impl Storable<HashMap<String, Task>> for Task {
 
     async fn load_all(path: String) -> Result<HashMap<String, Task>, TraceError> {
         let s = read_file(&format!("{}/{}", path, Self::FILE_EXTENSION)).await?;
-        let tasks = serde_json::from_str::<HashMap<String, Task>>(&s)
-            .map_err(TraceError::Serde)?;
+        let tasks = serde_json::from_str::<HashMap<String, Task>>(&s).map_err(TraceError::Serde)?;
         Ok(tasks)
     }
 }
