@@ -1,6 +1,6 @@
 use super::connection_manager::{AppUpdate, Connection};
 use super::database::Database;
-use crate::common::get_pid_hosting_at;
+use crate::common::{get_correct_subdivision_sec, get_pid_hosting_at, get_time_as_int};
 use crate::domain::application::{ApplicationState, ConnectionStatus};
 use crate::domain::TaskState;
 use crate::error::Error as TraceError;
@@ -179,14 +179,13 @@ impl State {
                         let task = Arc::make_mut(task_arc);
 
                         if let Some(dur) = poll_stats.busy_time {
-                            // cat de buna e sintaxa?
-                            task.busy = Some(format!("{}s {}ns", dur.seconds, dur.nanos));
-                            //println!("{:?}", task.busy);
+                            let sub_sec = get_correct_subdivision_sec(dur.nanos);
+                            task.busy = Some(format!("{}s {}", dur.seconds, sub_sec));
                         }
                     }
                 }
 
-                //handle runtime
+                //handle runtime and task status
                 if let Some(dropped_at) = updated_task.dropped_at {
                     if let Some(task_arc) = tasks_guard.get_mut(&key) {
                         // mark it Stopped if it was still Running
@@ -198,22 +197,24 @@ impl State {
                                 reason: None,
                             };
                         }
-
                         if let Some(created_at) = updated_task.created_at {
                             task.runtime = {
                                 let mut seconds = dropped_at.seconds - created_at.seconds;
                                 let mut nano = dropped_at.nanos - created_at.nanos;
                                 if nano < 0 {
                                     seconds -= 1;
-                                    nano = 1000000000 + nano;
+                                    nano = 1_000_000_000 + nano;
                                 }
-                                Some(format!("{}s {}ns", seconds, nano))
+                                Some(format!(
+                                    "{}s {}",
+                                    seconds,
+                                    get_correct_subdivision_sec(nano)
+                                ))
                             };
                         }
                     }
                 } else {
                     if let Some(task_arc) = tasks_guard.get_mut(&key) {
-                        // mark it Stopped if it was still Running
                         let task = Arc::make_mut(task_arc);
 
                         let now = SystemTime::now();
@@ -232,7 +233,11 @@ impl State {
                                     nano = 1000000000 + nano;
                                 }
 
-                                Some(format!("{}s {}ns", seconds, nano))
+                                Some(format!(
+                                    "{}s {}",
+                                    seconds,
+                                    get_correct_subdivision_sec(nano)
+                                ))
                             };
                         }
                     }
@@ -242,27 +247,15 @@ impl State {
                 if let Some(scheduled) = updated_task.scheduled_time {
                     if let Some(task_arc) = tasks_guard.get_mut(&key) {
                         let task = Arc::make_mut(task_arc);
-                        task.scheduled =
-                            Some(format!("{}s {}ns", scheduled.seconds, scheduled.nanos));
+                        task.scheduled = Some(format!(
+                            "{}s {}",
+                            scheduled.seconds,
+                            get_correct_subdivision_sec(scheduled.nanos)
+                        ));
                     }
                 }
 
                 //handle idle time
-                pub fn get_time_as_int(s: Option<String>) -> Option<(i64, i32)> {
-                    if let Some(runtime) = s {
-                        let parts: Vec<&str> = runtime.split_whitespace().collect();
-
-                        let seconds_str = parts[0].trim_end_matches('s');
-                        let nanos_str = parts[1].trim_end_matches("ns");
-
-                        let seconds = seconds_str.parse::<i64>().ok()?;
-                        let nanos = nanos_str.parse::<i32>().ok()?;
-
-                        return Some((seconds, nanos));
-                    }
-                    return None;
-                }
-
                 if let Some(task_arc) = tasks_guard.get_mut(&key) {
                     let task = Arc::make_mut(task_arc);
                     task.idle = {
@@ -285,7 +278,11 @@ impl State {
                                     seconds -= 1;
                                     nanos += 1000000000;
                                 }
-                                Some(format!("{}s {}ns", seconds, nanos))
+                                Some(format!(
+                                    "{}s {}",
+                                    seconds,
+                                    get_correct_subdivision_sec(nanos)
+                                ))
                             }
                             None => None,
                         };
