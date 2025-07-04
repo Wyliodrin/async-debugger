@@ -10,10 +10,11 @@ use crate::{
     domain::{application::Application, Task},
     mappers::tasks::map_to_domain_task,
 };
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::Utc;
 use console_api::tasks::TaskUpdate;
 use log::{debug, error, info, warn};
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::fs;
 use uuid::Uuid;
 
@@ -140,6 +141,11 @@ impl State {
     /// Receives a [`TaskUpdate`] object and applies the updates received
     /// on the current list of tasks
     pub async fn handle_task_update(&self, app_id: Uuid, task_update: TaskUpdate) {
+        //debug for missed task_updates
+        if task_update.dropped_events > 0 {
+            println!("missed task updates: {:?}", task_update.dropped_events);
+        }
+
         if let Some(app) = self.database.applications_read().await.get(&app_id) {
             if app.state() == ApplicationState::Disabled {
                 // If app is disabled we dont save anything
@@ -163,10 +169,25 @@ impl State {
             }
 
             // Updating tasks
-            let mut tasks_guard = self.database.tasks_write().await;
             for (tid, updated_task) in task_update.stats_update {
-                if updated_task.dropped_at.is_some() {
-                    let key = format!("{}.{}", app.url(), tid);
+                let mut tasks_guard = self.database.tasks_write().await;
+                let key = format!("{}.{}", app.title(), tid);
+
+                //handle busy time
+                if let Some(poll_stats) = updated_task.poll_stats {
+                    if let Some(task_arc) = tasks_guard.get_mut(&key) {
+                        let task = Arc::make_mut(task_arc);
+
+                        if let Some(dur) = poll_stats.busy_time {
+                            // cat de buna e sintaxa?
+                            task.busy = Some(format!("{}s {}ns", dur.seconds, dur.nanos));
+                            //println!("{:?}", task.busy);
+                        }
+                    }
+                }
+
+                //handle runtime
+                if let Some(dropped_at) = updated_task.dropped_at {
                     if let Some(task_arc) = tasks_guard.get_mut(&key) {
                         // mark it Stopped if it was still Running
                         let task = Arc::make_mut(task_arc);
@@ -177,24 +198,98 @@ impl State {
                                 reason: None,
                             };
                         }
+
+                        if let Some(created_at) = updated_task.created_at {
+                            task.runtime = {
+                                let mut seconds = dropped_at.seconds - created_at.seconds;
+                                let mut nano = dropped_at.nanos - created_at.nanos;
+                                if nano < 0 {
+                                    seconds -= 1;
+                                    nano = 1000000000 + nano;
+                                }
+                                Some(format!("{}s {}ns", seconds, nano))
+                            };
+                        }
+                    }
+                } else {
+                    if let Some(task_arc) = tasks_guard.get_mut(&key) {
+                        // mark it Stopped if it was still Running
+                        let task = Arc::make_mut(task_arc);
+
+                        let now = SystemTime::now();
+                        let duration_since_epoch =
+                            now.duration_since(UNIX_EPOCH).expect("Time went backwards");
+
+                        if let Some(created_at) = updated_task.created_at {
+                            task.runtime = {
+                                let mut seconds =
+                                    (duration_since_epoch.as_secs() as i64) - created_at.seconds;
+                                let mut nano =
+                                    (duration_since_epoch.subsec_nanos() as i32) - created_at.nanos;
+
+                                if nano < 0 {
+                                    seconds -= 1;
+                                    nano = 1000000000 + nano;
+                                }
+
+                                Some(format!("{}s {}ns", seconds, nano))
+                            };
+                        }
                     }
                 }
 
-                let poll_stats = updated_task.poll_stats;
-                match poll_stats {
-                    Some(stat) => {
-                        let key = format!("{}.{}", app.url(), tid);
-                        if let Some(task_arc) = tasks_guard.get_mut(&key) {
-                            let task = Arc::make_mut(task_arc);
-                            if let Some(dur) = stat.busy_time {
-                                task.busy = Some(dur.seconds.to_string());
-                            } else {
-                                task.busy = None;
-                            }
-                        }
+                //handle schedule time
+                if let Some(scheduled) = updated_task.scheduled_time {
+                    if let Some(task_arc) = tasks_guard.get_mut(&key) {
+                        let task = Arc::make_mut(task_arc);
+                        task.scheduled =
+                            Some(format!("{}s {}ns", scheduled.seconds, scheduled.nanos));
                     }
-                    None => {
-                        println!("test");
+                }
+
+                //handle idle time
+                pub fn get_time_as_int(s: Option<String>) -> Option<(i64, i32)> {
+                    if let Some(runtime) = s {
+                        let parts: Vec<&str> = runtime.split_whitespace().collect();
+
+                        let seconds_str = parts[0].trim_end_matches('s');
+                        let nanos_str = parts[1].trim_end_matches("ns");
+
+                        let seconds = seconds_str.parse::<i64>().ok()?;
+                        let nanos = nanos_str.parse::<i32>().ok()?;
+
+                        return Some((seconds, nanos));
+                    }
+                    return None;
+                }
+
+                if let Some(task_arc) = tasks_guard.get_mut(&key) {
+                    let task = Arc::make_mut(task_arc);
+                    task.idle = {
+                        let idle = match get_time_as_int(task.runtime.clone()) {
+                            Some((mut seconds, mut nanos)) => {
+                                if let Some((seconds_busy, nanos_busy)) =
+                                    get_time_as_int(task.busy.clone())
+                                {
+                                    if let Some((seconds_schedule, nanos_schedule)) =
+                                        get_time_as_int(task.scheduled.clone())
+                                    {
+                                        seconds = seconds - seconds_busy - seconds_schedule;
+                                        nanos = nanos - nanos_busy - nanos_schedule;
+                                    } else {
+                                        seconds = seconds - seconds_busy;
+                                        nanos = nanos - nanos_busy;
+                                    }
+                                }
+                                while nanos < 0 {
+                                    seconds -= 1;
+                                    nanos += 1000000000;
+                                }
+                                Some(format!("{}s {}ns", seconds, nanos))
+                            }
+                            None => None,
+                        };
+                        idle
                     }
                 }
             }
@@ -260,8 +355,17 @@ impl State {
         self.database.tasks_read().await.values().cloned().collect()
     }
 
-    pub async fn remove_task(&self, task_id: &str) {
-        self.database.tasks_write().await.remove(task_id);
+    pub async fn stop_task(&self, task_id: &str) {
+        let mut tasks = self.database.tasks_write().await;
+        if let Some(task_arc) = tasks.get_mut(task_id) {
+            let task = Arc::make_mut(task_arc);
+            if matches!(task.state, TaskState::Running) {
+                task.state = TaskState::Stopped {
+                    at: Utc::now(),
+                    reason: None,
+                };
+            }
+        }
     }
 
     // endregion

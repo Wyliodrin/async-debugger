@@ -23,8 +23,8 @@ pub fn map_to_domain_task(_app_id: Uuid, task: &tasks::Task) -> Option<Task> {
         kind,
         // new:
         state: TaskState::Running,
-        runtime: Some("10".into()),
-        scheduled: Some("10".into()),
+        runtime: None,
+        scheduled: None,
         idle: Some("10".into()),
         busy: None,
         location,

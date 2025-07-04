@@ -4,7 +4,6 @@ use crate::error::Error as TraceError;
 use crate::mappers::read_file;
 use crate::state_manager::connection_manager::{Command, Connection};
 use async_trait::async_trait;
-use chrono::{DateTime, Local};
 use log::debug;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -92,7 +91,7 @@ impl Application {
         self.state
     }
 
-    pub fn cpu_usage(&self) -> f32 {
+    pub fn _cpu_usage(&self) -> f32 {
         self.cpu_usage
     }
 
@@ -100,7 +99,7 @@ impl Application {
         self.cpu_usage = usage;
     }
 
-    pub fn memory_usage(&self) -> u64 {
+    pub fn _memory_usage(&self) -> u64 {
         self.memory_usage
     }
 

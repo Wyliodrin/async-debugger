@@ -177,7 +177,7 @@ impl StateManager {
         Ok(uuid)
     }
 
-    pub async fn enable_application(&self, uuid: Uuid, connection: Connection) {
+    pub async fn _enable_application(&self, uuid: Uuid, connection: Connection) {
         self.state.enable_app(uuid, connection).await
     }
 
