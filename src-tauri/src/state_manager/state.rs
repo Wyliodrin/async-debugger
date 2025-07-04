@@ -260,8 +260,17 @@ impl State {
         self.database.tasks_read().await.values().cloned().collect()
     }
 
-    pub async fn remove_task(&self, task_id: &str) {
-        self.database.tasks_write().await.remove(task_id);
+     pub async fn stop_task(&self, task_id: &str) {
+        let mut tasks = self.database.tasks_write().await;
+        if let Some(task_arc) = tasks.get_mut(task_id) {
+            let task = Arc::make_mut(task_arc);
+            if matches!(task.state, TaskState::Running) {
+                task.state = TaskState::Stopped {
+                    at: Utc::now(),
+                    reason: None,
+                };
+            }
+        }
     }
 
     // endregion
