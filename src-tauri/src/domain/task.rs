@@ -16,6 +16,13 @@ pub enum TaskState {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TaskDuration {
+    pub seconds: i64,
+    pub nanos: i32,
+    pub formatted: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Task {
     pub app_name: Option<String>,
     pub id: u64,
@@ -23,11 +30,12 @@ pub struct Task {
     pub name: Option<String>,
     pub kind: Option<String>,
     pub state: TaskState,
-    pub runtime: Option<String>,
-    pub scheduled: Option<String>,
-    pub idle: Option<String>,
-    pub busy: Option<String>,
+    pub runtime: Option<TaskDuration>,
+    pub scheduled: Option<TaskDuration>,
+    pub idle: Option<TaskDuration>,
+    pub busy: Option<TaskDuration>,
     pub location: Option<String>,
+    pub created_at: Option<DateTime<Utc>>,
 }
 
 impl Task {

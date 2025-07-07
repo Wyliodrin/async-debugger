@@ -5,6 +5,7 @@ import { Task } from "@/types/tasks";
 
 const tasks = ref([] as Task[]);
 const tasksSearch = ref('');
+let pause = ref(false);
 
 const taskHeaders: any = ref([
     { title: "App Name", key: "app_name", align: "center" },
@@ -13,6 +14,7 @@ const taskHeaders: any = ref([
     { title: "Name", key: "name", align: "center" },
     { title: "Type", key: "kind", align: "center" },
     { title: "State", key: "state", align: "center" },
+    { title: "Spawned time", key: "created_at", align: "center"},
     { title: "Runtime", key: "runtime", align: "center" },
     { title: "Scheduled", key: "scheduled", align: "center" },
     { title: "Idle", key: "idle", align: "center" },
@@ -31,20 +33,40 @@ function getTaskChipColor(stateOrKind: string): string {
     }
 };
 
+window.addEventListener("keydown", (event: KeyboardEvent) => {
+    if (event.code === "Space") {
+        console.log("daa");
+        event.preventDefault();
+        pause.value = !pause.value;
+    }
+});
+
 listen<any[]>("update:tasks", (e) => {
-    tasks.value = e.payload.map((t: any) => {
+    if (pause.value == false) {
+        tasks.value = e.payload.map((t: any) => {
+        const formattedFields = {
+        runtime: t.runtime.formatted,
+        scheduled: t.scheduled.formatted,
+        idle: t.idle.formatted,
+        busy: t.busy.formatted,
+        }
         if (typeof t.state === "string") {
-            return { ...t, state: t.state }
+            return { ...t, 
+                state: t.state,
+                ...formattedFields,
+                }
         }
         const keys = Object.keys(t.state ?? {})
         const stateKey = keys.length ? keys[0] : "Unknown"
 
         return {
             ...t,
-            state: stateKey
+            state: stateKey,
+            ...formattedFields
         }
     })
-    console.log("Afisez task " + JSON.stringify(tasks.value[0]));
+        console.log("Afisez task " + JSON.stringify(tasks.value[0]));
+        }
 })
 
 </script>
@@ -53,8 +75,17 @@ listen<any[]>("update:tasks", (e) => {
     <v-card elevation="2">
         <v-card-text>
             <div class="d-flex align-center justify-space-between mb-4">
+                <div>
                 <v-text-field v-model="tasksSearch" label="Search" prepend-inner-icon="mdi-magnify" variant="outlined"
                     hide-details single-line class="search-container" />
+                </div>
+                <v-chip
+                    :color="pause === false ? 'green' : 'red'"
+                    dark
+                    class="ma-2"
+                >
+                    {{ pause === false ? 'Connected' : 'Paused' }}
+                </v-chip>
             </div>
 
             <v-data-table :headers="taskHeaders" :items="tasks" :search="tasksSearch">

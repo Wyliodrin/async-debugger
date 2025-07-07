@@ -60,34 +60,12 @@ pub fn get_process_start_time(pid: u32) -> Option<String> {
 
 pub fn get_correct_subdivision_sec(nano: i32) -> String {
     if nano >= 1_000_000 {
-        return format!("{}ms", nano / 1_000_000);
+        return format!("{}ms", ((nano as f64) / 1_000_000.0).round() as i32);
     }
 
     if nano >= 1_000 {
-        return format!("{}μs", nano / 1_000);
+        return format!("{}μs", ((nano as f64) / 1_000.0).round() as i32);
     }
 
     format!("{}ns", nano)
-}
-
-pub fn get_time_as_int(s: Option<String>) -> Option<(i64, i32)> {
-    if let Some(runtime) = s {
-        let parts: Vec<&str> = runtime.split_whitespace().collect();
-
-        let seconds_str = parts[0].trim_end_matches('s');
-        let nanos_part = parts[1];
-
-        let seconds = seconds_str.parse::<i64>().ok()?;
-        if let Some(value) = nanos_part.strip_suffix("ns") {
-            let nanos = value.parse::<i32>().ok()?;
-            return Some((seconds, nanos));
-        } else if let Some(value) = nanos_part.strip_suffix("ms") {
-            let nanos = value.parse::<i32>().ok()? * 1_000_000;
-            return Some((seconds, nanos));
-        } else if let Some(value) = nanos_part.strip_suffix("μs") {
-            let nanos = value.parse::<i32>().ok()? * 1_000;
-            return Some((seconds, nanos));
-        }
-    }
-    return None;
 }

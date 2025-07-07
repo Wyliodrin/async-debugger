@@ -1,8 +1,8 @@
 use super::connection_manager::{AppUpdate, Connection};
 use super::database::Database;
-use crate::common::{get_correct_subdivision_sec, get_pid_hosting_at, get_time_as_int};
+use crate::common::{get_correct_subdivision_sec, get_pid_hosting_at};
 use crate::domain::application::{ApplicationState, ConnectionStatus};
-use crate::domain::TaskState;
+use crate::domain::{TaskDuration, TaskState};
 use crate::error::Error as TraceError;
 use crate::infra::guard::DataBaseWrite;
 use crate::infra::storage::Storage;
@@ -10,7 +10,7 @@ use crate::{
     domain::{application::Application, Task},
     mappers::tasks::map_to_domain_task,
 };
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use console_api::tasks::TaskUpdate;
 use log::{debug, error, info, warn};
 use std::sync::Arc;
@@ -172,24 +172,27 @@ impl State {
             for (tid, updated_task) in task_update.stats_update {
                 let mut tasks_guard = self.database.tasks_write().await;
                 let key = format!("{}.{}", app.title(), tid);
+                if let Some(task_arc) = tasks_guard.get_mut(&key) {
+                    let task = Arc::make_mut(task_arc);
 
-                //handle busy time
-                if let Some(poll_stats) = updated_task.poll_stats {
-                    if let Some(task_arc) = tasks_guard.get_mut(&key) {
-                        let task = Arc::make_mut(task_arc);
-
+                    //handle busy time
+                    if let Some(poll_stats) = updated_task.poll_stats {
                         if let Some(dur) = poll_stats.busy_time {
-                            let sub_sec = get_correct_subdivision_sec(dur.nanos);
-                            task.busy = Some(format!("{}s {}", dur.seconds, sub_sec));
+                            task.busy = Some(TaskDuration {
+                                seconds: dur.seconds,
+                                nanos: dur.nanos,
+                                formatted: format!(
+                                    "{}s {}",
+                                    dur.seconds,
+                                    get_correct_subdivision_sec(dur.nanos)
+                                ),
+                            });
                         }
                     }
-                }
 
-                //handle runtime and task status
-                if let Some(dropped_at) = updated_task.dropped_at {
-                    if let Some(task_arc) = tasks_guard.get_mut(&key) {
+                    //handle runtime and task status
+                    if let Some(dropped_at) = updated_task.dropped_at {
                         // mark it Stopped if it was still Running
-                        let task = Arc::make_mut(task_arc);
                         if matches!(task.state, TaskState::Running) {
                             info!("Marking task {} as Stopped", key);
                             task.state = TaskState::Stopped {
@@ -205,18 +208,18 @@ impl State {
                                     seconds -= 1;
                                     nano = 1_000_000_000 + nano;
                                 }
-                                Some(format!(
-                                    "{}s {}",
-                                    seconds,
-                                    get_correct_subdivision_sec(nano)
-                                ))
+                                Some(TaskDuration {
+                                    seconds: seconds,
+                                    nanos: nano,
+                                    formatted: format!(
+                                        "{}s {}",
+                                        seconds,
+                                        get_correct_subdivision_sec(nano)
+                                    ),
+                                })
                             };
                         }
-                    }
-                } else {
-                    if let Some(task_arc) = tasks_guard.get_mut(&key) {
-                        let task = Arc::make_mut(task_arc);
-
+                    } else {
                         let now = SystemTime::now();
                         let duration_since_epoch =
                             now.duration_since(UNIX_EPOCH).expect("Time went backwards");
@@ -233,60 +236,75 @@ impl State {
                                     nano = 1000000000 + nano;
                                 }
 
-                                Some(format!(
-                                    "{}s {}",
-                                    seconds,
-                                    get_correct_subdivision_sec(nano)
-                                ))
+                                Some(TaskDuration {
+                                    seconds: seconds,
+                                    nanos: nano,
+                                    formatted: format!(
+                                        "{}s {}",
+                                        seconds,
+                                        get_correct_subdivision_sec(nano)
+                                    ),
+                                })
                             };
                         }
                     }
-                }
 
-                //handle schedule time
-                if let Some(scheduled) = updated_task.scheduled_time {
-                    if let Some(task_arc) = tasks_guard.get_mut(&key) {
-                        let task = Arc::make_mut(task_arc);
-                        task.scheduled = Some(format!(
-                            "{}s {}",
-                            scheduled.seconds,
-                            get_correct_subdivision_sec(scheduled.nanos)
-                        ));
+                    //handle schedule time
+                    if let Some(scheduled) = updated_task.scheduled_time {
+                        task.scheduled = Some(TaskDuration {
+                            seconds: scheduled.seconds,
+                            nanos: scheduled.nanos,
+                            formatted: format!(
+                                "{}s {}",
+                                scheduled.seconds,
+                                get_correct_subdivision_sec(scheduled.nanos)
+                            ),
+                        });
                     }
-                }
 
-                //handle idle time
-                if let Some(task_arc) = tasks_guard.get_mut(&key) {
-                    let task = Arc::make_mut(task_arc);
+                    //handle idle time
                     task.idle = {
-                        let idle = match get_time_as_int(task.runtime.clone()) {
-                            Some((mut seconds, mut nanos)) => {
-                                if let Some((seconds_busy, nanos_busy)) =
-                                    get_time_as_int(task.busy.clone())
-                                {
-                                    if let Some((seconds_schedule, nanos_schedule)) =
-                                        get_time_as_int(task.scheduled.clone())
-                                    {
-                                        seconds = seconds - seconds_busy - seconds_schedule;
-                                        nanos = nanos - nanos_busy - nanos_schedule;
+                        let idle = match task.runtime.clone() {
+                            Some(runtime_duration) => {
+                                let mut seconds = runtime_duration.seconds;
+                                let mut nanos = runtime_duration.nanos;
+                                if let Some(busy_duration) = task.busy.clone() {
+                                    if let Some(schedule_duration) = task.scheduled.clone() {
+                                        seconds = seconds
+                                            - busy_duration.seconds
+                                            - schedule_duration.seconds;
+                                        nanos =
+                                            nanos - busy_duration.nanos - schedule_duration.nanos;
                                     } else {
-                                        seconds = seconds - seconds_busy;
-                                        nanos = nanos - nanos_busy;
+                                        seconds = seconds - busy_duration.seconds;
+                                        nanos = nanos - busy_duration.nanos;
                                     }
                                 }
                                 while nanos < 0 {
                                     seconds -= 1;
                                     nanos += 1000000000;
                                 }
-                                Some(format!(
-                                    "{}s {}",
+                                Some(TaskDuration {
                                     seconds,
-                                    get_correct_subdivision_sec(nanos)
-                                ))
+                                    nanos,
+                                    formatted: format!(
+                                        "{}s {}",
+                                        seconds,
+                                        get_correct_subdivision_sec(nanos)
+                                    ),
+                                })
                             }
                             None => None,
                         };
                         idle
+                    };
+
+                    //handle created_at
+                    if task.created_at.is_none() {
+                        task.created_at = DateTime::from_timestamp(
+                            updated_task.created_at.unwrap().seconds,
+                            updated_task.created_at.unwrap().nanos.try_into().unwrap(),
+                        );
                     }
                 }
             }

@@ -24,8 +24,9 @@ pub fn map_to_domain_task(_app_id: Uuid, task: &tasks::Task) -> Option<Task> {
         state: TaskState::Running,
         runtime: None,
         scheduled: None,
-        idle: Some("10".into()),
+        idle: None,
         busy: None,
         location,
+        created_at: None,
     })
 }
