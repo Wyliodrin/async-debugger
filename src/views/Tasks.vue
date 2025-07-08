@@ -41,7 +41,7 @@ const taskHeaders: DataTableHeader<Task>[] = [
   { title: "Name",     value: "name",     align: "center" },
   { title: "Type",     value: "kind",     align: "center" },
   { title: "State",    value: "state",    align: "center" },
-  { title: "Spawned time", value: "nice_created_at", align: "center" },
+  { title: "Spawned time", value: "created_at", align: "center" },
   { title: "Runtime",  value: "runtime",  align: "center" },
   { title: "Scheduled",value: "scheduled",align: "center" },
   { title: "Idle",     value: "idle",     align: "center" },
@@ -132,7 +132,6 @@ listen<any[]>("update:tasks", (e) => {
       <v-data-table
         :headers="taskHeaders"
         :items="filteredTasks"
-        hide-default-footer
       >
         <template #item.kind="{ item }">
           <v-chip :color="getTaskChipColor(item.kind)" small class="text-uppercase">

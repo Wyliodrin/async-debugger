@@ -10,7 +10,7 @@ use crate::{
     domain::{application::Application, Task},
     mappers::tasks::map_to_domain_task,
 };
-use chrono::{DateTime, Local, Utc};
+use chrono::{DateTime, Local, TimeZone, Utc};
 use console_api::tasks::TaskUpdate;
 use log::{debug, error, info, warn};
 use std::sync::Arc;
@@ -305,19 +305,13 @@ impl State {
                             .created_at
                             .as_ref()
                             .expect("we just tested is_some()");
-                        let dt_utc = DateTime::<Utc>::from_utc(
-                            chrono::NaiveDateTime::from_timestamp(
-                                created_ts.seconds,
-                                created_ts.nanos.try_into().unwrap(),
-                            ),
-                            Utc,
-                        );
+                        let dt_local: DateTime<Local> = Local
+                            .timestamp_opt(created_ts.seconds, created_ts.nanos as u32)
+                            .single()
+                            .expect("timestamp invalid");
 
-                        task.created_at = Some(dt_utc);
-
-                        let dt_local: DateTime<Local> = dt_utc.into();
                         let pretty = dt_local.format("%d/%m/%y %H:%M:%S.%f").to_string();
-                        task.nice_created_at = Some(pretty);
+                        task.created_at = Some(pretty);
                     }
                 }
             }
