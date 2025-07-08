@@ -14,7 +14,7 @@ const taskHeaders: any = ref([
     { title: "Name", key: "name", align: "center" },
     { title: "Type", key: "kind", align: "center" },
     { title: "State", key: "state", align: "center" },
-    { title: "Spawned time", key: "created_at", align: "center"},
+    { title: "Spawned time", key: "nice_created_at", align: "center"},
     { title: "Runtime", key: "runtime", align: "center" },
     { title: "Scheduled", key: "scheduled", align: "center" },
     { title: "Idle", key: "idle", align: "center" },

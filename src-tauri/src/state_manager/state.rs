@@ -10,7 +10,7 @@ use crate::{
     domain::{application::Application, Task},
     mappers::tasks::map_to_domain_task,
 };
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local, Utc};
 use console_api::tasks::TaskUpdate;
 use log::{debug, error, info, warn};
 use std::sync::Arc;
@@ -301,10 +301,23 @@ impl State {
 
                     //handle created_at
                     if task.created_at.is_none() {
-                        task.created_at = DateTime::from_timestamp(
-                            updated_task.created_at.unwrap().seconds,
-                            updated_task.created_at.unwrap().nanos.try_into().unwrap(),
+                        let created_ts = updated_task
+                            .created_at
+                            .as_ref()
+                            .expect("we just tested is_some()");
+                        let dt_utc = DateTime::<Utc>::from_utc(
+                            chrono::NaiveDateTime::from_timestamp(
+                                created_ts.seconds,
+                                created_ts.nanos.try_into().unwrap(),
+                            ),
+                            Utc,
                         );
+
+                        task.created_at = Some(dt_utc);
+
+                        let dt_local: DateTime<Local> = dt_utc.into();
+                        let pretty = dt_local.format("%d/%m/%y %H:%M:%S.%f").to_string();
+                        task.nice_created_at = Some(pretty);
                     }
                 }
             }

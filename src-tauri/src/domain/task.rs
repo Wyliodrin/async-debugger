@@ -36,6 +36,7 @@ pub struct Task {
     pub busy: Option<TaskDuration>,
     pub location: Option<String>,
     pub created_at: Option<DateTime<Utc>>,
+    pub nice_created_at: Option<String>
 }
 
 impl Task {

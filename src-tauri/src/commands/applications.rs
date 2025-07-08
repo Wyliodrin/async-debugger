@@ -43,7 +43,7 @@ pub async fn enable_app(
 ) -> Result<(), Error> {
     info!("enable_app: {uuid}");
 
-    // 1) look up the URL from state
+    // look up the URL from state
     let (updates_sender, _updates_receiver) = mpsc::channel(100);
     let apps = state_manager.state.get_current_applications_list().await;
     let app = apps
@@ -51,13 +51,13 @@ pub async fn enable_app(
         .find(|a| a.id() == &uuid)
         .ok_or_else(|| Error::Anyhow(anyhow::anyhow!("App {uuid} not found")))?;
 
-    // 2) reconnect
+    // reconnect
     let manager = ConnectionManager::new(updates_sender);
     let conn: Connection = manager
         .connect_app(*app.id(), app.url().clone(), app.pid())
         .await?;
 
-    // 3) flip state to Enabled and stash the new connection
+    // flip state to Enabled and stash the new connection
     state_manager.state.enable_app(uuid, conn).await;
     Ok(())
 }
