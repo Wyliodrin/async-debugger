@@ -24,8 +24,6 @@ export const useApplicationStore = defineStore('applications', () => {
                     connection_status: ""
                 });
             }
-        ).catch(
-            (error) => console.log("Failed to send add application command: " + error)
         );
     }
 
@@ -59,7 +57,6 @@ export const useApplicationStore = defineStore('applications', () => {
     // };
 
     return {
-        applications, getApplications, addApplication, deleteApplication, editApplication,
-        // toggleAppState
+        applications, getApplications, addApplication, deleteApplication, editApplication
     }
 });

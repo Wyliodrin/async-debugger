@@ -6,7 +6,7 @@ use crate::{
 };
 use console_api::instrument::{instrument_client::InstrumentClient, InstrumentRequest, Update};
 use log::{debug, error, info, warn};
-use std::{clone, collections::HashMap, sync::Arc, time::Duration};
+use std::{clone, collections::HashMap, error::Error, sync::Arc, time::Duration};
 use sysinfo::{Pid, ProcessRefreshKind, ProcessStatus, ProcessesToUpdate, System};
 use tauri::Url;
 use tokio::{
@@ -80,7 +80,7 @@ impl ConnectionManager {
         // Check if app already connected
         if self.active_connections.read().await.contains_key(&id) {
             warn!("Tried to add application with uuid {}, but the id is already attached to a connected application", id);
-            return Err(TraceError::ApplicationAlreadyConnected(id));
+            return Err(TraceError::ApplicationAlreadyConnected(id.to_string()));
         }
 
         let cloned_id = id.clone();
@@ -162,7 +162,7 @@ impl ConnectionManager {
                                     if let Some(app_update)=  ConnectionManager::check_app_stats(pid).await {
                                         updates_sender.send((cloned_id, Event::ApplicationUpdated(app_update))).await.ok();
                                     } else {
-                                        // TODO
+                                        updates_sender.send((cloned_id, Event::Error(TraceError::CannotReadProcessInfo { pid }))).await.ok();
                                     }
                                 }
                             }
@@ -171,7 +171,7 @@ impl ConnectionManager {
                     Err(error) => {
                         error!(
                             "Could not connect to application with url {} due to {error:?}",
-                            cloned_id
+                            url
                         );
                         updates_sender
                             .send((cloned_id, Event::Error(TraceError::Anyhow(error.into()))))
@@ -204,10 +204,13 @@ impl ConnectionManager {
     async fn connect_to_app(url: &Url) -> Result<Box<Streaming<Update>>, TraceError> {
         let endpoint = Endpoint::new(url.to_string()).map_err(|e| TraceError::Anyhow(e.into()))?;
         debug!("Created the endpoint");
-        let channel = endpoint.connect().await.map_err(|e| {
-            error!("Could not create a channel due to {e:?}");
-            TraceError::Anyhow(e.into())
-        })?;
+        let channel =
+            endpoint
+                .connect()
+                .await
+                .map_err(|e| TraceError::CannotCreateChannelForApp {
+                    url: url.to_string(),
+                })?;
         debug!("Created channel");
 
         let mut client = InstrumentClient::new(channel);

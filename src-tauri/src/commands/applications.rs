@@ -1,7 +1,7 @@
 use log::info;
-use tokio::sync::mpsc;
 use std::sync::Arc;
 use tauri::State;
+use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use crate::error::Error;
@@ -16,6 +16,12 @@ pub async fn applications_add(
 ) -> Result<Uuid, Error> {
     info!("Received command to add application with title {title} and url {url}");
 
+    let applications = state_manager.current_applications().await;
+    for app in applications {
+        if app.url().to_string() == url {
+            return Err(Error::ApplicationAlreadyConnected(url.into()));
+        }
+    }
     let url = url.try_into()?;
     state_manager.add_application(title, url).await
 }
@@ -40,14 +46,14 @@ pub async fn enable_app(
     // 1) look up the URL from state
     let (updates_sender, _updates_receiver) = mpsc::channel(100);
     let apps = state_manager.state.get_current_applications_list().await;
-    let app = apps.iter()
+    let app = apps
+        .iter()
         .find(|a| a.id() == &uuid)
         .ok_or_else(|| Error::Anyhow(anyhow::anyhow!("App {uuid} not found")))?;
 
     // 2) reconnect
     let manager = ConnectionManager::new(updates_sender);
-    let conn: Connection = 
-        manager
+    let conn: Connection = manager
         .connect_app(*app.id(), app.url().clone(), app.pid())
         .await?;
 
@@ -66,10 +72,9 @@ pub async fn disable_app(
 
 #[tauri::command]
 pub async fn remove_task(
-  state_manager: State<'_, Arc<StateManager>>,
-  task_id: String,
+    state_manager: State<'_, Arc<StateManager>>,
+    task_id: String,
 ) -> Result<(), Error> {
-  state_manager.state.stop_task(&task_id).await;
-  Ok(())
+    state_manager.state.stop_task(&task_id).await;
+    Ok(())
 }
-

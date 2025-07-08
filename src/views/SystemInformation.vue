@@ -7,6 +7,8 @@ import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 
 const applicationsStore = useApplicationStore();
+const errorMessage = ref('');
+const errorSnackbar = ref(false);
 
 const applicationHeaders: any = ref([
     { title: "Status", align: 'center', key: 'connection_status'},
@@ -102,7 +104,13 @@ function close() {
     editedItemName.value = '';
 }
 
+function showError(msg: string) {
+  errorMessage.value = msg;
+  errorSnackbar.value = true;
+}
+
 async function save() {
+    dialog.value = false;
     const currentApplication = {
         connection_status: editedItem.value.connection_status,
         pid: editedItem.value.pid,
@@ -119,7 +127,25 @@ async function save() {
     if (editedIndex.value > -1) {
         await applicationsStore.editApplication(currentApplication);
     } else {
-        await applicationsStore.addApplication(currentApplication.title, currentApplication.url);
+        try{
+            await applicationsStore.addApplication(currentApplication.title, currentApplication.url);
+        }
+        catch (error) {
+            if (typeof error == 'string'){
+                if (error.includes("ApplicationAlreadyConnected")){
+                    showError("This URL Application is already in the list");
+                }
+                else if (error.includes("PIDNotFound")){
+                    showError("The application at this URL is not running");
+                }
+                else{
+                    showError("Unexpected Error" + error);
+                }
+            }
+            else{
+                showError("Unexpected Error" + error);
+            }
+        }
     }
 
     close();
@@ -188,6 +214,23 @@ async function toggleAppState(app: Application) {
                 </v-btn>
             </div>
         </template>
+        <v-snackbar
+            v-model="errorSnackbar"
+            :timeout="6000"
+            color="error"
+            top
+            right
+        >
+            {{ errorMessage }}
+            
+            <v-btn
+            color="white"
+            variant="text"
+            @click="errorSnackbar = false"
+            >
+            Close
+            </v-btn>
+        </v-snackbar>
 
         <v-dialog v-model="dialog" max-width="500" persistent>
             <v-card v-click-outside="close">

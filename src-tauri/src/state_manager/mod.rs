@@ -88,13 +88,13 @@ impl StateManager {
                             self.state.handle_app_conn_update(app_id, ConnectionStatus::Connecting).await;
                         },
 
-                        Event::Connected {} => {
+                        Event::Connected => {
                             println!("Connected");
                             self.state.handle_app_conn_update(app_id, ConnectionStatus::Connected).await;
                         },
 
                         Event::Disconnected => {
-                            println!("Disconnedted app");
+                            println!("Disconnected app");
                             self.state.handle_app_conn_update(app_id, ConnectionStatus::Disconnected).await;
                         },
 
@@ -183,7 +183,7 @@ impl StateManager {
 
     /// Returns a list of the applications currently registered in the app
     /// (not necessarily active too)
-    pub async fn _current_applications(&self) -> Vec<Arc<Application>> {
+    pub async fn current_applications(&self) -> Vec<Arc<Application>> {
         self.state.get_current_applications_list().await
     }
 

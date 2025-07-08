@@ -53,16 +53,6 @@ pub async fn run() {
                     ui_state_manager.emit_update_applications(&app_handle).await;
                     ui_state_manager.emit_update_tasks(&app_handle).await;
                 }
-                // while let Some(command) = ui_rx.recv().await {
-                //     match command {
-                //         CommandUI::UpdateApplications => {
-                //             ui_state_manager.emit_update_applications(&app_handle).await;
-                //         }
-                //         CommandUI::UpdateTasks => {
-                //             ui_state_manager.emit_update_tasks(&app_handle).await;
-                //         }
-                //     }
-                // }
             });
 
             Ok(())
