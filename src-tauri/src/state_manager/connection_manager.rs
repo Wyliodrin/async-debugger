@@ -85,6 +85,8 @@ impl ConnectionManager {
 
         let cloned_id = id.clone();
         let connection_task = tokio::task::spawn(async move {
+            let mut sys = sysinfo::System::new_all();
+            sys.refresh_all();
             'connection: loop {
                 updates_sender
                     .send((cloned_id, Event::Connecting))
@@ -159,7 +161,18 @@ impl ConnectionManager {
                                 // TODO TEST: cgecj if we receive the app updates once per second
                                 _ = refresh.tick() => {
                                     debug!("Sending application info refresh");
-                                    if let Some(app_update)=  ConnectionManager::check_app_stats(pid).await {
+                                    if let Some(app_update)= {
+                                         sys.refresh_all();
+                                         // Wait a bit because CPU usage is based on diff.
+                                        tokio::time::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL).await;
+                                        // Refresh CPU usage to get actual value.
+                                        sys.refresh_processes_specifics(
+                                        ProcessesToUpdate::All,
+                                        true,
+                                        ProcessRefreshKind::nothing().with_cpu(),
+                                        );
+                                        Self::check_app_stats(&mut sys, pid).await
+                                        } {
                                         updates_sender.send((cloned_id, Event::ApplicationUpdated(app_update))).await.ok();
                                     } else {
                                         updates_sender.send((cloned_id, Event::Error(TraceError::CannotReadProcessInfo { pid }))).await.ok();
@@ -227,38 +240,18 @@ impl ConnectionManager {
         Ok(Box::new(stream))
     }
 
-    async fn check_app_stats(pid: u32) -> Option<AppUpdate> {
-        let mut sys = System::new_all();
-        let cpu_count = sys.cpus().len();
+    async fn check_app_stats(sys: &mut System, pid: u32) -> Option<AppUpdate> {
+        let cpu_count = sys.cpus().len() as f32;
         // println!("CPUS: {cpu_count}");
+        let process = sys.process(Pid::from_u32(pid))?;
+        let cpu_per_core = process.cpu_usage() / cpu_count;
+        let memory_mb = process.memory() / 1000000;
+        println!("{:?}", cpu_per_core);
 
-        sys.refresh_all();
-        // Wait a bit because CPU usage is based on diff.
-        sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL).await;
-
-        // Refresh CPU usage to get actual value.
-        sys.refresh_processes_specifics(
-            ProcessesToUpdate::All,
-            true,
-            ProcessRefreshKind::nothing().with_cpu(),
-        );
-
-        if let Some(process) = sys.process(Pid::from_u32(pid)) {
-            debug!("CPU USAGE: {}", process.cpu_usage());
-            debug!("MEMORY USAGE: {}", process.memory());
-            let memory_mb = process.memory() / 1000000;
-            Some(AppUpdate {
-                cpu_usage: if process.cpu_usage() > 0.0 {
-                    // TODO: to be checked if the value is accurate
-                    Some(process.cpu_usage() / (cpu_count as f32))
-                } else {
-                    None
-                },
-                memory_usage: memory_mb,
-                process_status: process.status(),
-            })
-        } else {
-            None
-        }
+        Some(AppUpdate {
+            cpu_usage: (cpu_per_core > 0.0).then(|| cpu_per_core),
+            memory_usage: memory_mb,
+            process_status: process.status(),
+        })
     }
 }
