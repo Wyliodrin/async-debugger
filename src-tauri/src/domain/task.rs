@@ -1,4 +1,5 @@
 use super::storable::Storable;
+use crate::domain::duration::Duration;
 use crate::error::Error as TraceError;
 use crate::mappers::read_file;
 use async_trait::async_trait;
@@ -16,13 +17,6 @@ pub enum TaskState {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct TaskDuration {
-    pub seconds: i64,
-    pub nanos: i32,
-    pub formatted: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Task {
     pub app_name: Option<String>,
     pub id: u64,
@@ -30,10 +24,10 @@ pub struct Task {
     pub name: Option<String>,
     pub kind: Option<String>,
     pub state: TaskState,
-    pub runtime: Option<TaskDuration>,
-    pub scheduled: Option<TaskDuration>,
-    pub idle: Option<TaskDuration>,
-    pub busy: Option<TaskDuration>,
+    pub runtime: Option<Duration>,
+    pub scheduled: Option<Duration>,
+    pub idle: Option<Duration>,
+    pub busy: Option<Duration>,
     pub location: Option<String>,
     pub created_at: Option<String>,
 }

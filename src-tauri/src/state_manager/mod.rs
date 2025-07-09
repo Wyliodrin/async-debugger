@@ -73,9 +73,12 @@ impl StateManager {
                 // Received updates about apps
                 Some((app_id, event)) = updates_receiver.recv() => {
                     match event {
-                        Event::TaskUpdate(update) => {
+                        Event::Update(update) => {
                             if let Some(task_update) = update.task_update {
                                 self.state.handle_task_update(app_id, task_update).await;
+                            }
+                            if let Some(resource_update) = update.resource_update {
+                                self.state.handle_resource_update(app_id, resource_update).await;
                             }
                         },
 
@@ -204,6 +207,11 @@ impl StateManager {
     pub async fn emit_update_applications(&self, app_handle: &AppHandle) {
         let elements = self.state.get_current_applications_list().await;
         app_handle.emit("update:applications", elements).ok();
+    }
+
+    pub async fn emit_update_resources(&self, app_handle: &AppHandle) {
+        let resources = self.state.get_resources().await;
+        app_handle.emit("update:resources", resources).ok();
     }
 
     // pub async fn emit_connection_update(&self, app_id: )

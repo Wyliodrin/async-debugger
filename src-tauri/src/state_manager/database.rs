@@ -1,5 +1,5 @@
 use crate::{
-    domain::{application::Application, storable::Storable, Task},
+    domain::{application::Application, resource::Resource, storable::Storable, Task},
     error::Error as TraceError,
     infra::{guard::WriteableDataBaseGuard, storage::Storage},
 };
@@ -15,11 +15,12 @@ use uuid::Uuid;
 #[derive(Default)]
 pub(crate) struct Database {
     storage_folder: String,
-
-    // todo: astea trebuie scrise pe disk + incarcate la pornire
+    //applications list
     applications: tokio::sync::RwLock<HashMap<Uuid, Arc<Application>>>,
-    // toate taskurile curente de la toate aplicatiile
+    //tasks list
     tasks: tokio::sync::RwLock<HashMap<String, Arc<Task>>>,
+    //resources list
+    resources: tokio::sync::RwLock<HashMap<String, Arc<Resource>>>,
 }
 
 impl Database {
@@ -36,6 +37,7 @@ impl Database {
             storage_folder,
             applications: RwLock::new(HashMap::new()),
             tasks: RwLock::new(HashMap::new()),
+            resources: RwLock::new(HashMap::new()),
         }
     }
 
@@ -93,10 +95,34 @@ impl Database {
             tasks.values().len()
         );
 
+        //Load all resources
+        let resources: HashMap<String, Arc<Resource>> =
+            match Resource::load_all(storage_folder.clone()).await {
+                Ok(resources) => resources
+                    .into_iter()
+                    .map(|(id, resource)| (id, Arc::new(resource)))
+                    .collect(),
+                Err(error) => match error {
+                    TraceError::PathNotFound(_) => {
+                        debug!("Tasks file not found, using empty list");
+                        HashMap::new()
+                    }
+                    _ => {
+                        error!("Failed to load applications due to {error:?}");
+                        return Err(error);
+                    }
+                },
+            };
+        debug!(
+            "Successfully loaded {} tasks from disk.",
+            resources.values().len()
+        );
+
         Ok(Self {
             storage_folder,
             applications: RwLock::new(applications),
             tasks: RwLock::new(tasks),
+            resources: RwLock::new(resources),
         })
     }
 }
@@ -129,6 +155,20 @@ impl Storage for Database {
         WriteableDataBaseGuard {
             folder: &self.storage_folder,
             title: "tasks",
+            elements,
+        }
+    }
+
+    async fn resources_read(&self) -> HashMap<String, Arc<Resource>> {
+        self.resources.read().await.clone()
+    }
+
+    async fn resources_write(&self) -> WriteableDataBaseGuard<'_, HashMap<String, Arc<Resource>>> {
+        let elements = self.resources.write().await;
+
+        WriteableDataBaseGuard {
+            folder: &self.storage_folder,
+            title: "resources",
             elements,
         }
     }

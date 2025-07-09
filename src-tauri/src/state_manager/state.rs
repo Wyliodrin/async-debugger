@@ -1,16 +1,18 @@
 use super::connection_manager::{AppUpdate, Connection};
 use super::database::Database;
-use crate::common::{get_correct_subdivision_sec, get_pid_hosting_at};
+use crate::common::get_pid_hosting_at;
 use crate::domain::application::{ApplicationState, ConnectionStatus};
-use crate::domain::{TaskDuration, TaskState};
+use crate::domain::resource::ResourceStatus;
+use crate::domain::{duration::Duration, TaskState};
 use crate::error::Error as TraceError;
 use crate::infra::guard::DataBaseWrite;
 use crate::infra::storage::Storage;
 use crate::{
-    domain::{application::Application, Task},
-    mappers::tasks::map_to_domain_task,
+    domain::{application::Application, resource::Resource, Task},
+    mappers::{resources::map_to_domain_resource, tasks::map_to_domain_task},
 };
 use chrono::{DateTime, Local, TimeZone, Utc};
+use console_api::resources::ResourceUpdate;
 use console_api::tasks::TaskUpdate;
 use log::{debug, error, info, warn};
 use std::sync::Arc;
@@ -178,15 +180,7 @@ impl State {
                     //handle busy time
                     if let Some(poll_stats) = updated_task.poll_stats {
                         if let Some(dur) = poll_stats.busy_time {
-                            task.busy = Some(TaskDuration {
-                                seconds: dur.seconds,
-                                nanos: dur.nanos,
-                                formatted: format!(
-                                    "{}s {}",
-                                    dur.seconds,
-                                    get_correct_subdivision_sec(dur.nanos)
-                                ),
-                            });
+                            task.busy = Some(Duration::new(dur.seconds, dur.nanos));
                         }
                     }
 
@@ -199,25 +193,17 @@ impl State {
                                 at: Utc::now(),
                                 reason: None,
                             };
-                        }
-                        if let Some(created_at) = updated_task.created_at {
-                            task.runtime = {
-                                let mut seconds = dropped_at.seconds - created_at.seconds;
-                                let mut nano = dropped_at.nanos - created_at.nanos;
-                                if nano < 0 {
-                                    seconds -= 1;
-                                    nano = 1_000_000_000 + nano;
-                                }
-                                Some(TaskDuration {
-                                    seconds: seconds,
-                                    nanos: nano,
-                                    formatted: format!(
-                                        "{}s {}",
-                                        seconds,
-                                        get_correct_subdivision_sec(nano)
-                                    ),
-                                })
-                            };
+                            if let Some(created_at) = updated_task.created_at {
+                                task.runtime = {
+                                    let mut seconds = dropped_at.seconds - created_at.seconds;
+                                    let mut nano = dropped_at.nanos - created_at.nanos;
+                                    if nano < 0 {
+                                        seconds -= 1;
+                                        nano = 1_000_000_000 + nano;
+                                    }
+                                    Some(Duration::new(seconds, nano))
+                                };
+                            }
                         }
                     } else {
                         let now = SystemTime::now();
@@ -236,30 +222,14 @@ impl State {
                                     nano = 1000000000 + nano;
                                 }
 
-                                Some(TaskDuration {
-                                    seconds: seconds,
-                                    nanos: nano,
-                                    formatted: format!(
-                                        "{}s {}",
-                                        seconds,
-                                        get_correct_subdivision_sec(nano)
-                                    ),
-                                })
+                                Some(Duration::new(seconds, nano))
                             };
                         }
                     }
 
                     //handle schedule time
                     if let Some(scheduled) = updated_task.scheduled_time {
-                        task.scheduled = Some(TaskDuration {
-                            seconds: scheduled.seconds,
-                            nanos: scheduled.nanos,
-                            formatted: format!(
-                                "{}s {}",
-                                scheduled.seconds,
-                                get_correct_subdivision_sec(scheduled.nanos)
-                            ),
-                        });
+                        task.scheduled = Some(Duration::new(scheduled.seconds, scheduled.nanos))
                     }
 
                     //handle idle time
@@ -284,15 +254,7 @@ impl State {
                                     seconds -= 1;
                                     nanos += 1000000000;
                                 }
-                                Some(TaskDuration {
-                                    seconds,
-                                    nanos,
-                                    formatted: format!(
-                                        "{}s {}",
-                                        seconds,
-                                        get_correct_subdivision_sec(nanos)
-                                    ),
-                                })
+                                Some(Duration::new(seconds, nanos))
                             }
                             None => None,
                         };
@@ -391,4 +353,166 @@ impl State {
     }
 
     // endregion
+
+    //region RESOURCES
+
+    pub async fn handle_resource_update(&self, app_id: Uuid, resources_update: ResourceUpdate) {
+        //debug for missed resources_updates
+        if resources_update.dropped_events > 0 {
+            println!(
+                "missed resources updates: {:?}",
+                resources_update.dropped_events
+            );
+        }
+
+        if let Some(app) = self.database.applications_read().await.get(&app_id) {
+            if app.state() == ApplicationState::Disabled {
+                // If app is disabled we dont save anything
+                return;
+            }
+
+            // Saving new resources
+            for raw in resources_update.new_resources {
+                if let Some(mut domain_resource) = map_to_domain_resource(&raw) {
+                    domain_resource.app_name = Some(app.title().to_string());
+                    info!(
+                        "Received a new task for app '{}' (id {})",
+                        app.title(),
+                        app_id
+                    );
+                    self.database
+                        .resources_write()
+                        .await
+                        .insert(domain_resource.id(), Arc::new(domain_resource));
+                }
+            }
+
+            //Updating Resources
+            for (id, updated_resource) in resources_update.stats_update {
+                let mut resource_guard = self.database.resources_write().await;
+                let key = format!("{}.{}", app.title(), id);
+                if let Some(resource_arc) = resource_guard.get_mut(&key) {
+                    let resource = Arc::make_mut(resource_arc);
+
+                    //handle duration resource
+                    if let Some(dropped_at) = updated_resource.dropped_at {
+                        // mark it Stopped if it was still Running
+                        if !matches!(resource.status, ResourceStatus::Disconnected) {
+                            info!("Marking resource {} as Stopped", key);
+                            resource.status = ResourceStatus::Disconnected;
+                            if let Some(created_at) = updated_resource.created_at {
+                                resource.duration = {
+                                    let mut seconds = dropped_at.seconds - created_at.seconds;
+                                    let mut nano = dropped_at.nanos - created_at.nanos;
+                                    if nano < 0 {
+                                        seconds -= 1;
+                                        nano = 1_000_000_000 + nano;
+                                    }
+                                    Some(Duration::new(seconds, nano))
+                                };
+                            }
+                        }
+                    } else {
+                        let now = SystemTime::now();
+                        let duration_since_epoch =
+                            now.duration_since(UNIX_EPOCH).expect("Time went backwards");
+
+                        if let Some(created_at) = updated_resource.created_at {
+                            resource.duration = {
+                                let mut seconds =
+                                    (duration_since_epoch.as_secs() as i64) - created_at.seconds;
+                                let mut nano =
+                                    (duration_since_epoch.subsec_nanos() as i32) - created_at.nanos;
+
+                                if nano < 0 {
+                                    seconds -= 1;
+                                    nano = 1000000000 + nano;
+                                }
+
+                                Some(Duration::new(seconds, nano))
+                            };
+                        }
+                    }
+
+                    //handle attributes
+                    let mut attribute_str = String::from("");
+                    for attr in updated_resource.attributes {
+                        if let Some(field) = attr.field {
+                            if let Some(name) = field.name {
+                                match name {
+                                    //if the name is a String, we concatenate directly
+                                    console_api::field::Name::StrName(s) => {
+                                        attribute_str = attribute_str + &s;
+                                    }
+
+                                    //if attribute name is an index from metadata.field_names
+                                    console_api::field::Name::NameIdx(_) => {
+                                        //TODO - a se vedea cum functioneaza NameIdx
+                                    }
+                                };
+
+                                if let Some(value) = field.value {
+                                    attribute_str = attribute_str + ": ";
+
+                                    match value {
+                                        console_api::field::Value::DebugVal(val) => {
+                                            attribute_str = attribute_str + &val
+                                        }
+                                        console_api::field::Value::StrVal(val) => {
+                                            attribute_str = attribute_str + &val
+                                        }
+                                        console_api::field::Value::U64Val(val) => {
+                                            attribute_str = attribute_str + (&val.to_string())
+                                        }
+                                        console_api::field::Value::I64Val(val) => {
+                                            attribute_str = attribute_str + (&val.to_string())
+                                        }
+                                        console_api::field::Value::BoolVal(val) => {
+                                            attribute_str = attribute_str + (&val.to_string())
+                                        }
+                                    }
+                                }
+
+                                if let Some(s) = attr.unit {
+                                    attribute_str = attribute_str + &s;
+                                }
+                            }
+                        }
+                        attribute_str = attribute_str + "\n";
+                    }
+
+                    if !attribute_str.is_empty() {
+                        resource.attributes = Some(attribute_str);
+                    }
+                }
+            }
+        }
+        //             println!("Update: ID: {:?}", resource.id);
+        //             for attr in updated_resource.attributes {
+        //                 println!("    {:?}", attr.field.as_ref().unwrap().name);
+        //                 println!("    {:?}", attr.field.as_ref().unwrap().value);
+        //                 println!("     {:?}", attr.unit);
+        //             }
+        //         }
+        //     }
+
+        //     for poll_op in resources_update.new_poll_ops {
+        //         println!("Poll Op Update");
+        //         println!(
+        //             "resource_id: {:?}; name: {:?}; task_id: {:?}; is_ready: {:?};",
+        //             poll_op.resource_id, poll_op.name, poll_op.task_id, poll_op.is_ready
+        //         );
+        //         println!("async_op_id: {:?}", poll_op.async_op_id);
+        //     }
+        // }
+    }
+
+    pub async fn get_resources(&self) -> Vec<Arc<Resource>> {
+        self.database
+            .resources_read()
+            .await
+            .values()
+            .cloned()
+            .collect()
+    }
 }

@@ -17,6 +17,11 @@ const sidebarItems: sidebarItem[] = [
         icon: ChecklistIcon,
         to: '/tasks-overview'
     },
+    {
+        title: 'Resources Overview',
+        icon: ChecklistIcon,
+        to: '/resources-overview'
+    }
 ]
 
 export default sidebarItems;

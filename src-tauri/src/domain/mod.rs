@@ -1,6 +1,8 @@
 //! Module defining all data objects
 
 pub(crate) mod application;
+pub(crate) mod duration;
+pub(crate) mod resource;
 pub(crate) mod storable;
 pub(crate) mod task;
 

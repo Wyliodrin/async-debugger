@@ -1,5 +1,3 @@
-import { AppConnStatus } from "@/types/appConnStatus";
-
 export interface Application {
   connection_status: string;
   state: string,

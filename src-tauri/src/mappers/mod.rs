@@ -1,3 +1,4 @@
+pub(crate) mod resources;
 pub(crate) mod tasks;
 
 use crate::error::Error as TraceError;

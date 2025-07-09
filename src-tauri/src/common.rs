@@ -57,15 +57,3 @@ pub fn get_process_start_time(pid: u32) -> Option<String> {
 
     None
 }
-
-pub fn get_correct_subdivision_sec(nano: i32) -> String {
-    if nano >= 1_000_000 {
-        return format!("{}ms", ((nano as f64) / 1_000_000.0).round() as i32);
-    }
-
-    if nano >= 1_000 {
-        return format!("{}μs", ((nano as f64) / 1_000.0).round() as i32);
-    }
-
-    format!("{}ns", nano)
-}

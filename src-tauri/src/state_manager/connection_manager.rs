@@ -29,7 +29,7 @@ pub enum Command {
 pub enum Event {
     Connecting,
     Connected,
-    TaskUpdate(Update),
+    Update(Update),
     ApplicationUpdated(AppUpdate),
     Error(TraceError),
     Disconnected,
@@ -133,7 +133,7 @@ impl ConnectionManager {
                                         Ok(message) => {
                                             if let Some(update) = message {
                                                 info!("Received an update about application with url {}", url);
-                                                updates_sender.send((cloned_id, Event::TaskUpdate(update))).await.ok();
+                                                updates_sender.send((cloned_id, Event::Update(update))).await.ok();
                                             }
                                         }
                                         Err(_error) => {

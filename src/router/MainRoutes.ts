@@ -20,6 +20,11 @@ const MainRoutes = {
             path: '/tasks-overview',
             component: () => import('@/views/Tasks.vue')
         },
+        {
+            name: 'Resources Overview',
+            path: '/resources-overview',
+            component: () => import('@/views/Resources.vue')
+        }
     ]
 }
 
