@@ -45,18 +45,22 @@ export const useApplicationStore = defineStore('applications', () => {
         }
     }
 
-    // TODO cheama din functiile Amaliei
-    // async function toggleAppState(appID: string) {
-    //     const application = applications.value.find(item => item.id === appID);
-    //     if (application) {
-    //         application.state === 'Enabled'
-    //         ? (application.state = 'Disabled')
-    //         : (application.state = 'Enabled');
-
-    //     }
-    // };
+    async function toggleAppState(app: Application) {
+        try {
+            if (app.state === "Enabled") {
+                await invoke("disable_app", { uuid: app.id });
+                app.state = "Disabled";
+            } else {
+                await invoke("enable_app", { uuid: app.id });
+                app.state = "Enabled";
+            }
+        } catch (e) {
+            console.error("toggleAppState failed", e);
+        }
+    }
 
     return {
-        applications, getApplications, addApplication, deleteApplication, editApplication
+        applications, getApplications, addApplication, deleteApplication, editApplication,
+        toggleAppState
     }
 });

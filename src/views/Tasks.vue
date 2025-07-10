@@ -2,21 +2,20 @@
 import { ref, computed } from 'vue'
 import { listen } from '@tauri-apps/api/event'
 import type { DataTableHeader } from 'vuetify'
-import type { Task } from '@/types/tasks'
+import { useDataStore } from '@/stores/data'
 
-const tasks        = ref<Task[]>([])
 const tasksSearch  = ref('')
-const pause        = ref(false)
 const selectedApp  = ref('All')
+const dataStore = useDataStore();
 
 const appList = computed(() => {
-  const names  = tasks.value.map(t => t.app_name)
+  const names  = dataStore.tasks.map(t => t.app_name)
   const unique = Array.from(new Set(names)).sort()
   return ['All', ...unique]
 })
 
 const filteredTasks = computed(() => {
-  return tasks.value
+  return dataStore.tasks
     .filter(t => selectedApp.value === 'All' || t.app_name === selectedApp.value)
     .filter(t => {
       const q = tasksSearch.value.toLowerCase()
@@ -54,38 +53,10 @@ function getTaskChipColor(stateOrKind: string) {
   }
 }
 
-window.addEventListener('keydown', (e: KeyboardEvent) => {
-  if (e.code === 'Space') {
-    e.preventDefault()
-    pause.value = !pause.value
-  }
-})
+
 
 listen<any[]>('update:tasks', e => {
-  if (!pause.value) {
-    tasks.value = e.payload.map(t => {
-      const formatted = {
-        runtime:   t.runtime.formatted,
-        scheduled: t.scheduled.formatted,
-        idle:      t.idle.formatted,
-        busy:      t.busy.formatted,
-      }
-
-      let stateKey: string
-      if (typeof t.state === 'string') {
-        stateKey = t.state
-      } else {
-        const keys = Object.keys(t.state ?? {})
-        stateKey = keys.length ? keys[0]! : 'Unknown'
-      }
-
-      return {
-        ...t,
-        state: stateKey,
-        ...formatted,
-      }
-    })
-  }
+  dataStore.handleTaskUpdate(e);
 })
 </script>
 
@@ -102,9 +73,6 @@ listen<any[]>('update:tasks', e => {
           single-line
           class="search-container"
         />
-        <v-chip :color="pause ? 'red' : 'green'" dark>
-          {{ pause ? 'Paused' : 'Connected' }}
-        </v-chip>
       </div>
 
       <div class="d-flex flex-wrap mb-4">

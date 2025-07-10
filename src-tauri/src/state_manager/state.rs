@@ -397,9 +397,9 @@ impl State {
                     //handle duration resource
                     if let Some(dropped_at) = updated_resource.dropped_at {
                         // mark it Stopped if it was still Running
-                        if !matches!(resource.status, ResourceStatus::Disconnected) {
+                        if !matches!(resource.status, ResourceStatus::Dropped) {
                             info!("Marking resource {} as Stopped", key);
-                            resource.status = ResourceStatus::Disconnected;
+                            resource.status = ResourceStatus::Dropped;
                             if let Some(created_at) = updated_resource.created_at {
                                 resource.duration = {
                                     let mut seconds = dropped_at.seconds - created_at.seconds;
@@ -487,24 +487,6 @@ impl State {
                 }
             }
         }
-        //             println!("Update: ID: {:?}", resource.id);
-        //             for attr in updated_resource.attributes {
-        //                 println!("    {:?}", attr.field.as_ref().unwrap().name);
-        //                 println!("    {:?}", attr.field.as_ref().unwrap().value);
-        //                 println!("     {:?}", attr.unit);
-        //             }
-        //         }
-        //     }
-
-        //     for poll_op in resources_update.new_poll_ops {
-        //         println!("Poll Op Update");
-        //         println!(
-        //             "resource_id: {:?}; name: {:?}; task_id: {:?}; is_ready: {:?};",
-        //             poll_op.resource_id, poll_op.name, poll_op.task_id, poll_op.is_ready
-        //         );
-        //         println!("async_op_id: {:?}", poll_op.async_op_id);
-        //     }
-        // }
     }
 
     pub async fn get_resources(&self) -> Vec<Arc<Resource>> {

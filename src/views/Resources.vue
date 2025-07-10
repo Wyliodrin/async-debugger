@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import type { Resource } from '@/types/resources';
 import { DataTableHeader } from 'vuetify';
 import { listen } from '@tauri-apps/api/event'
+import { useDataStore } from '@/stores/data';
 
-const resources = ref<Resource[]>([]);
 const resourcesSearch = ref('');
+const selectedApp  = ref('All');
+const dataStore = useDataStore();
 
 const resourcesHeaders = ref<DataTableHeader[]>([
     { title: "Resource Type", key: "resource_type", align:"center" },
@@ -20,12 +21,20 @@ const resourcesHeaders = ref<DataTableHeader[]>([
 function getResourceChipColor(status: string){
     switch(status){
         case 'Pending': return 'brown'
+        case 'Ready': return 'green'
         default:        return 'gray'
     }
 }
 
+const appList = computed(() => {
+  const names  = dataStore.resources.map(r => r.app_name)
+  const unique = Array.from(new Set(names)).sort()
+  return ['All', ...unique]
+})
+
 const filteredResources = computed(() => {
-  return resources.value
+  return dataStore.resources
+    .filter(r => selectedApp.value === 'All' || r.app_name === selectedApp.value)
     .filter(r => {
       const q = resourcesSearch.value.toLowerCase()
       return (
@@ -38,14 +47,7 @@ const filteredResources = computed(() => {
 });
 
 listen<any[]>('update:resources', e => {
-    resources.value = e.payload.map(r => {
-
-      return {
-        ...r,
-        duration: r.duration.formatted
-      }
-    })
-    console.log("Resources primite:" + JSON.stringify(e.payload[0]));
+  dataStore.handleResourceUpdate(e);
 })
 
 </script>
@@ -63,6 +65,20 @@ listen<any[]>('update:resources', e => {
           single-line
           class="search-container"
         />
+      </div>
+
+      <div class="d-flex flex-wrap mb-4">
+        <v-btn
+          v-for="app in appList"
+          :key="app"
+          :color="selectedApp === app ? 'primary' : 'grey lighten-2'"
+          variant="tonal"
+          size="small"
+          class="ma-1"
+          @click="selectedApp = app"
+        >
+          {{ app }}
+        </v-btn>
       </div>
 
       <v-data-table

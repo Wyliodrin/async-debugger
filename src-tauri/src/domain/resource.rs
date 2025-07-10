@@ -10,7 +10,7 @@ use std::collections::HashMap;
 pub enum ResourceStatus {
     Ready,
     Pending,
-    Disconnected,
+    Dropped,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

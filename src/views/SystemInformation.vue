@@ -4,9 +4,10 @@ import { Application } from '@/types/applications';
 import { computed, Ref, ref } from 'vue';
 import { PlayerPlayFilledIcon, PlayerPauseFilledIcon, PencilIcon, TrashIcon, PlusIcon } from 'vue-tabler-icons';
 import { listen } from '@tauri-apps/api/event';
-import { invoke } from '@tauri-apps/api/core';
+import { useDataStore } from '@/stores/data';
 
 const applicationsStore = useApplicationStore();
+const dataStore = useDataStore();
 const errorMessage = ref('');
 const errorSnackbar = ref(false);
 
@@ -172,31 +173,21 @@ function editApp(app: Application) {
 }
 
 listen<Application[]>("update:applications", (event) => {
-    console.log("Received applications: " + JSON.stringify(event.payload[0]));
-    event.payload.forEach(newApp => {
-        console.log(newApp);
-        const existingApp = applicationsStore.applications.find(app => app.id === newApp.id);
-        if (existingApp) {
-            Object.assign(existingApp, newApp);
-        } else {
-            applicationsStore.applications.push(newApp);
-        }
-    });
+    if (dataStore.pause == false) {
+        console.log("Received applications: " + JSON.stringify(event.payload[0]));
+        event.payload.forEach(newApp => {
+            console.log(newApp);
+            const existingApp = applicationsStore.applications.find(app => app.id === newApp.id);
+            if (existingApp) {
+                Object.assign(existingApp, newApp);
+            } else {
+                applicationsStore.applications.push(newApp);
+            }
+        });
+    }
 });
 
-async function toggleAppState(app: Application) {
-    try {
-        if (app.state === "Enabled") {
-            await invoke("disable_app", { uuid: app.id });
-            app.state = "Disabled";
-        } else {
-            await invoke("enable_app", { uuid: app.id });
-            app.state = "Enabled";
-        }
-    } catch (e) {
-        console.error("toggleAppState failed", e);
-    }
-}
+
 
 </script>
 
@@ -291,7 +282,7 @@ async function toggleAppState(app: Application) {
                 </div>
             </template>
             <template v-slot:item.actions="{ item }">
-                <v-btn icon flat @click="toggleAppState(item)"
+                <v-btn icon flat @click="applicationsStore.toggleAppState(item)"
                     :class="item.state === 'Disabled' ? 'disabled-action-btn' : ''">
                     <PlayerPlayFilledIcon v-if="item.state === 'Disabled'" stroke-width="1.5" size="20"
                         class="text-primary" />

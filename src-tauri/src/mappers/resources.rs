@@ -27,10 +27,6 @@ pub fn map_to_domain_resource(resource: &resources::Resource) -> Option<Resource
 
     let id = resource.id.as_ref().map(|v| v.id)?;
     let target = Some(resource.concrete_type.clone());
-    println!(
-        "ID: {:?}; resource_type: {:?}; location: {:?}; target: {:?}",
-        id, resource_type, location, target
-    );
 
     Some(Resource {
         app_name: None,

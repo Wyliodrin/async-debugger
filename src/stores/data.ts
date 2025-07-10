@@ -1,0 +1,58 @@
+import { Resource } from "@/types/resources";
+import { Task } from "@/types/tasks";
+import { defineStore } from "pinia";
+import { ref } from "vue";
+
+export const useDataStore = defineStore('data', () => {
+    const pause = ref(false);
+
+    function togglePause(){
+        pause.value = !pause.value;
+    }
+
+    const tasks= ref<Task[]>([]);
+
+    function handleTaskUpdate(e: {payload: any[]}) {
+        if (pause.value == false) {
+            tasks.value = e.payload.map(t => {
+            const formatted = {
+                runtime:   t.runtime.formatted,
+                scheduled: t.scheduled.formatted,
+                idle:      t.idle.formatted,
+                busy:      t.busy.formatted,
+            }
+
+            let stateKey: string
+            if (typeof t.state === 'string') {
+                stateKey = t.state
+            } else {
+                const keys = Object.keys(t.state ?? {})
+                stateKey = keys.length ? keys[0]! : 'Unknown'
+            }
+
+            return {
+                ...t,
+                state: stateKey,
+                ...formatted,
+            }
+            })
+        }
+    }
+
+    const resources = ref<Resource[]>([]);
+
+    function handleResourceUpdate(e: {payload: any[]}) {
+        if (pause.value == false) {
+            resources.value = e.payload.map(r => {
+                return {
+                ...r,
+                duration: r.duration.formatted
+                }
+            })
+            console.log("Resources primite:" + JSON.stringify(e.payload[0]));
+        }
+    }
+
+
+    return {pause, togglePause, tasks, handleTaskUpdate, resources, handleResourceUpdate};
+});

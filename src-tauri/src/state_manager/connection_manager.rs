@@ -1,5 +1,6 @@
 #![allow(unused)]
 
+use crate::common::get_pid_hosting_at;
 use crate::{
     domain::application::{self, Application},
     error::Error as TraceError,
@@ -69,7 +70,7 @@ impl ConnectionManager {
         &self,
         id: Uuid,
         url: Url,
-        pid: u32,
+        mut pid: u32,
     ) -> Result<Connection, TraceError> {
         let (command_sender, mut command_receiver) = mpsc::channel(100);
         let connection = Connection {
@@ -175,7 +176,14 @@ impl ConnectionManager {
                                         } {
                                         updates_sender.send((cloned_id, Event::ApplicationUpdated(app_update))).await.ok();
                                     } else {
-                                        updates_sender.send((cloned_id, Event::Error(TraceError::CannotReadProcessInfo { pid }))).await.ok();
+                                        if let Some(new_pid) = get_pid_hosting_at(url.clone()){
+                                            if new_pid != pid {
+                                                pid = new_pid;
+                                            }
+                                            else{
+                                                updates_sender.send((cloned_id, Event::Error(TraceError::CannotReadProcessInfo { pid }))).await.ok();
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -246,10 +254,9 @@ impl ConnectionManager {
         let process = sys.process(Pid::from_u32(pid))?;
         let cpu_per_core = process.cpu_usage() / cpu_count;
         let memory_mb = process.memory() / 1000000;
-        println!("{:?}", cpu_per_core);
 
         Some(AppUpdate {
-            cpu_usage: (cpu_per_core > 0.0).then(|| cpu_per_core),
+            cpu_usage: Some(cpu_per_core),
             memory_usage: memory_mb,
             process_status: process.status(),
         })
