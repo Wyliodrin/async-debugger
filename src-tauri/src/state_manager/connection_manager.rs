@@ -4,6 +4,7 @@ use crate::common::get_pid_hosting_at;
 use crate::{
     domain::application::{self, Application},
     error::Error as TraceError,
+    infra::spy_channel::{SpyEvent, SpySender},
 };
 use console_api::instrument::{instrument_client::InstrumentClient, InstrumentRequest, Update};
 use log::{debug, error, info, warn};
@@ -36,6 +37,7 @@ pub enum Event {
     Disconnected,
 }
 
+#[derive(Clone)]
 pub struct AppUpdate {
     pub cpu_usage: Option<f32>,
     pub memory_usage: u64,
@@ -55,14 +57,28 @@ impl Drop for Connection {
 }
 
 pub struct ConnectionManager {
-    updates_sender: Sender<(Uuid, Event)>,
+    sender: SpySender,
     active_connections: Arc<RwLock<HashMap<Uuid, tokio::task::JoinHandle<()>>>>,
 }
 
+impl Clone for Event {
+    fn clone(&self) -> Self {
+        match self {
+            Event::Connecting => Event::Connecting,
+            Event::Connected => Event::Connected,
+            Event::Update(u) => Event::Update(u.clone()),
+            Event::ApplicationUpdated(a) => Event::ApplicationUpdated(a.clone()),
+            Event::Error(_) => panic!("Cannot clone Event::Error (rich TraceError)"),
+            Event::Disconnected => Event::Disconnected,
+        }
+    }
+}
+
 impl ConnectionManager {
-    pub fn new(updates_sender: Sender<(Uuid, Event)>) -> Self {
+    pub fn new(real_tx: Sender<(Uuid, Event)>, spy_tx: Sender<(Uuid, SpyEvent)>) -> Self {
+        let sender = SpySender::new(real_tx, spy_tx);
         Self {
-            updates_sender,
+            sender,
             active_connections: Arc::new(RwLock::new(HashMap::new())),
         }
     }
@@ -76,7 +92,7 @@ impl ConnectionManager {
         let connection = Connection {
             commands: command_sender,
         };
-        let updates_sender = self.updates_sender.clone();
+        let updates_sender = self.sender.clone();
 
         // Check if app already connected
         if self.active_connections.read().await.contains_key(&id) {

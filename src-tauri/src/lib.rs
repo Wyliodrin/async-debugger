@@ -8,12 +8,12 @@ mod state_manager;
 
 use state_manager::StateManager;
 use std::{sync::Arc, time::Duration};
-use tauri::{async_runtime, Manager};
+use tauri::{async_runtime, Emitter, Manager};
 use tokio::{task, time::sleep};
 
 pub async fn run() {
     // Load context
-    let (state_manager, updates_receiver) = StateManager::new()
+    let (state_manager, updates_receiver, spy_rx) = StateManager::new()
         .await
         // TODO: should we panic here or disable the persistency?
         .unwrap_or_else(|err| panic!("Cannot start application due to {err:?}"));
@@ -54,6 +54,20 @@ pub async fn run() {
                     ui_state_manager.emit_update_tasks(&app_handle).await;
                     ui_state_manager.emit_update_resources(&app_handle).await;
                     ui_state_manager.emit_update_polls(&app_handle).await;
+                }
+            });
+
+            let mut spy_rx = spy_rx;
+            let window_clone = window.clone();
+            async_runtime::spawn(async move {
+                while let Some((id, spy_evt)) = spy_rx.recv().await {
+                    let payload = serde_json::json!({
+                      "id":    id.to_string(),
+                      "event": spy_evt,
+                    });
+                    if let Err(e) = window_clone.emit("spy:event", payload) {
+                        eprintln!("failed to emit spy:event: {e:?}");
+                    }
                 }
             });
 

@@ -5,6 +5,7 @@ pub mod state;
 
 use crate::domain::application::{Application, ConnectionStatus};
 use crate::error::Error as TraceError;
+use crate::infra::spy_channel::{SpyEvent, SpySender};
 use crate::state_manager::connection_manager::Connection;
 use crate::state_manager::state::State;
 use anyhow::Result;
@@ -31,9 +32,14 @@ pub struct StateManager {
 }
 
 impl StateManager {
-    pub async fn new() -> Result<(StateManager, Receiver<(Uuid, Event)>), TraceError> {
-        let (updates_sender, updates_receiver) = mpsc::channel(100);
-
+    pub async fn new() -> Result<
+        (
+            StateManager,
+            Receiver<(Uuid, Event)>,
+            Receiver<(Uuid, SpyEvent)>,
+        ),
+        TraceError,
+    > {
         // TODO: check if error handling could be done better here (maybe looking for a single error is not the best case)
         let state = match State::load().await {
             // State loaded successfully
@@ -53,14 +59,17 @@ impl StateManager {
             }
         };
 
-        let connection_manager = ConnectionManager::new(updates_sender);
+        let (real_tx, real_rx) = mpsc::channel::<(Uuid, Event)>(100);
+        let (spy_tx, spy_rx) = mpsc::channel::<(Uuid, SpyEvent)>(100);
+        let _spy_sender = SpySender::new(real_tx.clone(), spy_tx.clone());
+        let connection_manager = ConnectionManager::new(real_tx.clone(), spy_tx.clone());
 
         let context = StateManager {
             connection_manager,
             state,
         };
 
-        Ok((context, updates_receiver))
+        Ok((context, real_rx, spy_rx))
     }
 
     // region events

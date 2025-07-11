@@ -1,12 +1,10 @@
+use crate::error::Error;
+use crate::state_manager::connection_manager::Connection;
+use crate::state_manager::StateManager;
 use log::info;
 use std::sync::Arc;
 use tauri::State;
-use tokio::sync::mpsc;
 use uuid::Uuid;
-
-use crate::error::Error;
-use crate::state_manager::connection_manager::{Connection, ConnectionManager};
-use crate::state_manager::StateManager;
 
 #[tauri::command]
 pub async fn applications_add(
@@ -41,23 +39,20 @@ pub async fn enable_app(
     state_manager: State<'_, Arc<StateManager>>,
     uuid: Uuid,
 ) -> Result<(), Error> {
-    info!("enable_app: {uuid}");
-
-    // look up the URL from state
-    let (updates_sender, _updates_receiver) = mpsc::channel(100);
     let apps = state_manager.state.get_current_applications_list().await;
     let app = apps
         .iter()
         .find(|a| a.id() == &uuid)
         .ok_or_else(|| Error::Anyhow(anyhow::anyhow!("App {uuid} not found")))?;
 
-    // reconnect
-    let manager = ConnectionManager::new(updates_sender);
-    let conn: Connection = manager
+    // ask the existing connection manager to connect.  That connection manager has already been built with the SpySender and 2 channels
+    let conn: Connection = state_manager
+        .connection_manager
         .connect_app(*app.id(), app.url().clone(), app.pid())
         .await?;
 
     // flip state to Enabled and stash the new connection
+    info!("enable_app: {uuid}");
     state_manager.state.enable_app(uuid, conn).await;
     Ok(())
 }
