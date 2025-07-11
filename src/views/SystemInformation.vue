@@ -194,6 +194,8 @@ listen<Application[]>("update:applications", (event) => {
 <template>
     <v-card elevation="2">
         <template v-slot:text>
+            <h1 class="mb-4 font-weight-bold">Applications traced</h1>
+
             <div class="d-flex align-center justify-space-between">
                 <div class="search-container">
                     <v-text-field v-model="applications" label="Search" prepend-inner-icon="mdi-magnify"

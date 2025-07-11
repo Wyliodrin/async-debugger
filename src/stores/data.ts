@@ -1,5 +1,6 @@
 import { Resource } from "@/types/resources";
 import { Task } from "@/types/tasks";
+import { Poll } from "@/types/polls";
 import { defineStore } from "pinia";
 import { ref } from "vue";
 
@@ -53,6 +54,21 @@ export const useDataStore = defineStore('data', () => {
         }
     }
 
+    const polls = ref<Poll[]>([]);
+    
+    function handlePollUpdate(e: {payload: any[]}) {
+        if (pause.value == false) {
+            polls.value = e.payload.map(p => {
+                return {
+                    ...p
+                }
+            })
+            console.log("Polls primite: " + JSON.stringify(e.payload[0]));
+        }
+    }
 
-    return {pause, togglePause, tasks, handleTaskUpdate, resources, handleResourceUpdate};
+
+    return {pause, togglePause, tasks, handleTaskUpdate, resources,
+        handleResourceUpdate, polls, handlePollUpdate
+    };
 });

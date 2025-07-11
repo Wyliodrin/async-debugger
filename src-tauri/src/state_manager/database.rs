@@ -1,5 +1,5 @@
 use crate::{
-    domain::{application::Application, resource::Resource, storable::Storable, Task},
+    domain::{application::Application, poll::Poll, resource::Resource, storable::Storable, Task},
     error::Error as TraceError,
     infra::{guard::WriteableDataBaseGuard, storage::Storage},
 };
@@ -21,6 +21,8 @@ pub(crate) struct Database {
     tasks: tokio::sync::RwLock<HashMap<String, Arc<Task>>>,
     //resources list
     resources: tokio::sync::RwLock<HashMap<String, Arc<Resource>>>,
+    //polls list
+    polls: tokio::sync::RwLock<Vec<Arc<Poll>>>,
 }
 
 impl Database {
@@ -38,6 +40,7 @@ impl Database {
             applications: RwLock::new(HashMap::new()),
             tasks: RwLock::new(HashMap::new()),
             resources: RwLock::new(HashMap::new()),
+            polls: RwLock::new(Vec::new()),
         }
     }
 
@@ -85,7 +88,7 @@ impl Database {
                     HashMap::new()
                 }
                 _ => {
-                    error!("Failed to load applications due to {error:?}");
+                    error!("Failed to load tasks due to {error:?}");
                     return Err(error);
                 }
             },
@@ -108,13 +111,32 @@ impl Database {
                         HashMap::new()
                     }
                     _ => {
-                        error!("Failed to load applications due to {error:?}");
+                        error!("Failed to load resources due to {error:?}");
                         return Err(error);
                     }
                 },
             };
         debug!(
-            "Successfully loaded {} tasks from disk.",
+            "Successfully loaded {} resources from disk.",
+            resources.values().len()
+        );
+
+        //Load all polls
+        let polls: Vec<Arc<Poll>> = match Poll::load_all(storage_folder.clone()).await {
+            Ok(polls) => polls.into_iter().map(|poll| Arc::new(poll)).collect(),
+            Err(error) => match error {
+                TraceError::PathNotFound(_) => {
+                    debug!("Polls file not found, using empty list");
+                    Vec::new()
+                }
+                _ => {
+                    error!("Failed to load polls due to {error:?}");
+                    return Err(error);
+                }
+            },
+        };
+        debug!(
+            "Successfully loaded {} polls from disk.",
             resources.values().len()
         );
 
@@ -123,6 +145,7 @@ impl Database {
             applications: RwLock::new(applications),
             tasks: RwLock::new(tasks),
             resources: RwLock::new(resources),
+            polls: RwLock::new(polls),
         })
     }
 }
@@ -169,6 +192,20 @@ impl Storage for Database {
         WriteableDataBaseGuard {
             folder: &self.storage_folder,
             title: "resources",
+            elements,
+        }
+    }
+
+    async fn polls_read(&self) -> Vec<Arc<Poll>> {
+        self.polls.read().await.clone()
+    }
+
+    async fn polls_write(&self) -> WriteableDataBaseGuard<'_, Vec<Arc<Poll>>> {
+        let elements = self.polls.write().await;
+
+        WriteableDataBaseGuard {
+            folder: &self.storage_folder,
+            title: "polls",
             elements,
         }
     }

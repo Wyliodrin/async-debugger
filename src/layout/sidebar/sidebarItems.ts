@@ -21,7 +21,12 @@ const sidebarItems: sidebarItem[] = [
         title: 'Resources Overview',
         icon: ChecklistIcon,
         to: '/resources-overview'
-    }
+    },
+    {
+        title: 'Polling Overview',
+        icon: ChecklistIcon,
+        to: '/polls-overview'
+    },
 ]
 
 export default sidebarItems;

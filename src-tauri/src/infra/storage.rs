@@ -1,5 +1,5 @@
 use super::guard::WriteableDataBaseGuard;
-use crate::domain::{application::Application, resource::Resource, Task};
+use crate::domain::{application::Application, poll::Poll, resource::Resource, Task};
 use async_trait::async_trait;
 use std::{collections::HashMap, sync::Arc};
 use uuid::Uuid;
@@ -19,4 +19,8 @@ pub(crate) trait Storage: Send + Sync {
     async fn resources_read(&self) -> HashMap<String, Arc<Resource>>;
 
     async fn resources_write(&self) -> WriteableDataBaseGuard<'_, HashMap<String, Arc<Resource>>>;
+
+    async fn polls_read(&self) -> Vec<Arc<Poll>>;
+
+    async fn polls_write(&self) -> WriteableDataBaseGuard<'_, Vec<Arc<Poll>>>;
 }

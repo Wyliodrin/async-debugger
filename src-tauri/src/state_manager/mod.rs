@@ -8,6 +8,7 @@ use crate::error::Error as TraceError;
 use crate::state_manager::connection_manager::Connection;
 use crate::state_manager::state::State;
 use anyhow::Result;
+use chrono::{DateTime, Local, TimeZone};
 use connection_manager::{ConnectionManager, Event};
 use log::{debug, error, info};
 use std::sync::Arc;
@@ -74,12 +75,34 @@ impl StateManager {
                 Some((app_id, event)) = updates_receiver.recv() => {
                     match event {
                         Event::Update(update) => {
-                            if let Some(task_update) = update.task_update {
-                                self.state.handle_task_update(app_id, task_update).await;
-                            }
-                            if let Some(resource_update) = update.resource_update {
-                                self.state.handle_resource_update(app_id, resource_update).await;
-                            }
+                            let task_future = async {
+                                if let Some(task_update) = update.task_update {
+                                    self.state.handle_task_update(app_id, task_update).await;
+                                }
+                            };
+
+                            let resource_future = async {
+                                if let Some(resource_update) = update.resource_update {
+                                    let update_time = {
+                                        if update.now.is_some() {
+                                            let received_update_time = update.now
+                                                .as_ref()
+                                                .expect("we just tested is_some()");
+                                            let dt_local: DateTime<Local> = Local
+                                                .timestamp_opt(received_update_time.seconds, received_update_time.nanos as u32)
+                                                .single()
+                                                .expect("timestamp invalid");
+                                            let pretty = dt_local.format("%d/%m/%y %H:%M:%S.%f").to_string();
+                                            Some(pretty)
+                                        } else {
+                                            None
+                                        }
+                                    };
+                                    self.state.handle_resource_update(app_id, resource_update, update_time).await;
+                                }
+                            };
+
+                            tokio::join!(task_future, resource_future);
                         },
 
                         Event::ApplicationUpdated(update) => {
@@ -212,6 +235,11 @@ impl StateManager {
     pub async fn emit_update_resources(&self, app_handle: &AppHandle) {
         let resources = self.state.get_resources().await;
         app_handle.emit("update:resources", resources).ok();
+    }
+
+    pub async fn emit_update_polls(&self, app_handle: &AppHandle) {
+        let polls = self.state.get_polls().await;
+        app_handle.emit("update:polls", polls).ok();
     }
 
     // pub async fn emit_connection_update(&self, app_id: )

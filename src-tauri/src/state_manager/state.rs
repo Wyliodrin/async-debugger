@@ -8,8 +8,10 @@ use crate::error::Error as TraceError;
 use crate::infra::guard::DataBaseWrite;
 use crate::infra::storage::Storage;
 use crate::{
-    domain::{application::Application, resource::Resource, Task},
-    mappers::{resources::map_to_domain_resource, tasks::map_to_domain_task},
+    domain::{application::Application, poll::Poll, resource::Resource, Task},
+    mappers::{
+        poll::map_to_domain_poll, resources::map_to_domain_resource, tasks::map_to_domain_task,
+    },
 };
 use chrono::{DateTime, Local, TimeZone, Utc};
 use console_api::resources::ResourceUpdate;
@@ -354,9 +356,14 @@ impl State {
 
     // endregion
 
-    //region RESOURCES
+    //region RESOURCES + Polls
 
-    pub async fn handle_resource_update(&self, app_id: Uuid, resources_update: ResourceUpdate) {
+    pub async fn handle_resource_update(
+        &self,
+        app_id: Uuid,
+        resources_update: ResourceUpdate,
+        received_at: Option<String>,
+    ) {
         //debug for missed resources_updates
         if resources_update.dropped_events > 0 {
             println!(
@@ -376,7 +383,7 @@ impl State {
                 if let Some(mut domain_resource) = map_to_domain_resource(&raw) {
                     domain_resource.app_name = Some(app.title().to_string());
                     info!(
-                        "Received a new task for app '{}' (id {})",
+                        "Received a new resource for app '{}' (id {})",
                         app.title(),
                         app_id
                     );
@@ -486,6 +493,38 @@ impl State {
                     }
                 }
             }
+
+            //Saving new poll_ops
+            for raw in resources_update.new_poll_ops {
+                if let Some(mut domain_poll) = map_to_domain_poll(&raw) {
+                    domain_poll.app_name = Some(app.title().to_string());
+
+                    if let Some(resource_id) = domain_poll.resource_id {
+                        let key = format!("{}.{}", app.title(), resource_id);
+                        let resources = self.database.resources_read().await;
+                        if let Some(resource_arc) = resources.get(&key) {
+                            if let Some(loc) = resource_arc.location.clone() {
+                                domain_poll.location = Some(loc);
+                            }
+                        }
+
+                        info!(
+                            "Received a new poll_op for app '{}' (id {})",
+                            app.title(),
+                            app_id
+                        );
+                    }
+
+                    if let Some(received_time) = received_at.clone() {
+                        domain_poll.received_at = Some(received_time);
+                    }
+
+                    self.database
+                        .polls_write()
+                        .await
+                        .push(Arc::new(domain_poll));
+                }
+            }
         }
     }
 
@@ -497,4 +536,9 @@ impl State {
             .cloned()
             .collect()
     }
+
+    pub async fn get_polls(&self) -> Vec<Arc<Poll>> {
+        self.database.polls_read().await
+    }
+    //endregion
 }

@@ -3,7 +3,11 @@ use console_api::resources;
 use console_api::resources::resource::kind;
 
 pub fn map_to_domain_resource(resource: &resources::Resource) -> Option<Resource> {
-    let location = resource.location.as_ref().map(|loc| loc.to_string());
+    let mut location = resource.location.as_ref().map(|loc| loc.to_string());
+    if location.is_none() {
+        location = Some("Unknown".into());
+    }
+
     let resource_type = {
         if let Some(kind) = resource.kind.as_ref() {
             if let Some(kind_of_kind) = kind.kind.as_ref() {

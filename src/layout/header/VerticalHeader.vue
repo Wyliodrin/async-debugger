@@ -11,9 +11,11 @@ const dataStore = useDataStore();
       <div class="d-flex align-center flex-grow-10">
         <img class="mr-2" src="../../assets/logo.png" width="30" height="30">
         <v-toolbar-title class="text-no-wrap">Async Debug Tool</v-toolbar-title>
+        <div class="ml-5">
         <v-chip :color="dataStore.pause ? 'red' : 'green'" dark>
           {{ dataStore.pause ? 'Paused' : 'Connected' }}
         </v-chip>
+        </div>
       </div>
     </v-app-bar>
   </template>

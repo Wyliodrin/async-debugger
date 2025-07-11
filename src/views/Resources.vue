@@ -55,6 +55,8 @@ listen<any[]>('update:resources', e => {
 <template>
   <v-card elevation="2">
     <v-card-text>
+      <h1 class="mb-4 font-weight-bold">Resources</h1>
+      
       <div class="d-flex align-center justify-space-between mb-4">
         <v-text-field
           v-model="resourcesSearch"

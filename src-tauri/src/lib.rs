@@ -53,6 +53,7 @@ pub async fn run() {
                     ui_state_manager.emit_update_applications(&app_handle).await;
                     ui_state_manager.emit_update_tasks(&app_handle).await;
                     ui_state_manager.emit_update_resources(&app_handle).await;
+                    ui_state_manager.emit_update_polls(&app_handle).await;
                 }
             });
 
