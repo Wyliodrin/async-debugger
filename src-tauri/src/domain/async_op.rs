@@ -45,7 +45,7 @@ impl Storable<HashMap<String, AsyncOp>> for AsyncOp {
 
 #[async_trait]
 impl Storable<HashMap<String, TaskOp>> for TaskOp {
-    const FILE_EXTENSION: &str = "tasks_op.json";
+    const FILE_EXTENSION: &str = "tasks_ops.json";
 
     async fn load_all(path: String) -> Result<HashMap<String, TaskOp>, TraceError> {
         let s = read_file(&format!("{}/{}", path, Self::FILE_EXTENSION)).await?;

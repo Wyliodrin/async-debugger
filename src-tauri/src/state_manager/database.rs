@@ -178,7 +178,7 @@ impl Database {
                 .collect(),
             Err(error) => match error {
                 TraceError::PathNotFound(_) => {
-                    debug!("Tasks_op file not found, using empty list");
+                    debug!("Tasks_ops file not found, using empty list");
                     HashMap::new()
                 }
                 _ => {
