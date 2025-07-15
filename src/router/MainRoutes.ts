@@ -34,6 +34,11 @@ const MainRoutes = {
             name: 'Polling Overview',
             path: '/polls-overview',
             component: () => import('@/views/Polls.vue')
+        },
+        {
+            name: 'CPU Overview',
+            path: '/cpu-overview',
+            component: () => import('@/views/CPU.vue')
         }
     ]
 }
