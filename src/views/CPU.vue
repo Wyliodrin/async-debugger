@@ -18,6 +18,8 @@ import {
 import zoomPlugin from 'chartjs-plugin-zoom'
 import datalabelsPlugin from 'chartjs-plugin-datalabels'
 import 'chartjs-adapter-date-fns'
+import type { TimeStamp, TaskOpMap } from '@/types/async_ops'
+import { useDataStore } from '@/stores/data'
 
 Chart.register(
   BarController,
@@ -32,11 +34,8 @@ Chart.register(
   datalabelsPlugin
 )
 
-import type { TimeStamp, TaskOpMap } from '@/types/async_ops'
-import { useDataStore } from '@/stores/data'
 const dataStore = useDataStore()
-
-function toMillis(ts: TimeStamp | null): number {
+function toMillis(ts: TimeStamp | null) {
   if (!ts) return 0
   return ts.seconds * 1000 + ts.nanos / 1_000_000
 }
@@ -64,7 +63,8 @@ const rawOps = ref<TaskOpMap>({})
 const canvasRef = ref<HTMLCanvasElement>()
 let chart: Chart<'bar'> | null = null
 
-const tasks = computed<Task[]>(() => {
+// derive tasks/time bounds exactly as you had them
+const tasks = computed(() => {
   return Object.entries(rawOps.value).map(([name, entry]) => ({
     name,
     operations: entry.operations
@@ -206,40 +206,33 @@ function initChart() {
   })
 }
 
-function updateChartData() {
+function updateChart() {
   if (!chart) return
-  // update slider if we have new bounds
-  sliderRange.value = [
-    Math.min(sliderRange.value[0], dataMin.value),
-    Math.max(sliderRange.value[1], dataMax.value)
-  ]
+
   // swap in the new data
-  chart.data.datasets![0].data = buildDataset()
+  chart.data.datasets[0].data = buildDataset()
+  chart.options.scales!['x']!.min = sliderRange.value[0]
+  chart.options.scales!['x']!.max = sliderRange.value[1]
   chart.update('none')
 }
 
 watch(sliderRange, ([min, max]) => {
-  if (!chart) return
-  chart.options.scales!['x']!.min = min
-  chart.options.scales!['x']!.max = max
-  chart.update('none')
-}, { deep: true })
+  fromInput.value = formatTime(min);
+  toInput.value = formatTime(max);
+}, { deep: true });
+
 
 function resetView() {
   sliderRange.value = [dataMin.value, dataMax.value]
+  fromInput.value = formatTime(dataMin.value);
+  toInput.value = formatTime(dataMax.value);
   chart?.resetZoom()
 }
 
-const formatTime = (ts: number) => new Date(ts).toLocaleTimeString()
-
 const onPayload = throttle((payload: TaskOpMap) => {
-  // If the user has paused the updates, do nothing
-  if (dataStore.pause) {
-    return
-  }
-
+  // if the user has paused the updates, do nothing
+  if (dataStore.pause) return
   rawOps.value = payload
-
   // first time ever?
   if (!loaded.value) {
     loaded.value = true
@@ -249,45 +242,106 @@ const onPayload = throttle((payload: TaskOpMap) => {
     nextTick(initChart)
   } else {
     // subsequent updates: just refill the dataset
-    updateChartData()
+    updateChart()
   }
-}, 500/*ms*/)
-
+}, 500)
 // subscribe
-const unlisten = listen<TaskOpMap>('update:tasks_ops', (evt) => {
-  onPayload(evt.payload)
-})
+const unlisten = listen<TaskOpMap>('update:tasks_ops', e => onPayload(e.payload))
+onBeforeUnmount(async () => await unlisten.then(f => f()) && chart?.destroy())
 
-onBeforeUnmount(() => {
-  unlisten.then(fn => fn())
-  chart?.destroy()
-})
+const fromInput = ref(formatISO(dataMin.value))
+const toInput = ref(formatISO(dataMax.value))
+
+function formatISO(ms: number) {
+  return new Date(ms).toISOString().slice(11, 19)
+}
+
+function parseTimeOnBase(baseMs: number, hhmmss: string): number | null {
+  const [h, m, s] = hhmmss.split(':').map(x => Number(x));
+  if (
+    hhmmss.length !== 8 ||
+    isNaN(h!) || h! < 0 || h! > 23 ||
+    isNaN(m!) || m! < 0 || m! > 59 ||
+    isNaN(s!) || s! < 0 || s! > 59
+  ) {
+    return null;
+  }
+
+  const base = new Date(baseMs);
+  const out = new Date(base.getTime());
+  out.setHours(h!, m, s, 0);
+  return out.getTime();
+}
+
+function formatTime(ms: number): string {
+  const d = new Date(ms);
+  // pad to always have 2 digits
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  return `${hh}:${mm}:${ss}`;
+}
+
+
+
+function onFromBlur() {
+  const ms = parseTimeOnBase(dataMin.value, fromInput.value);
+  if (ms !== null) {
+    sliderRange.value[0] = Math.min(Math.max(dataMin.value, ms), sliderRange.value[1]);
+  } else {
+    fromInput.value = formatTime(sliderRange.value[0]);
+  }
+}
+
+
+function onToBlur() {
+  const ms = parseTimeOnBase(dataMin.value, toInput.value);
+  if (ms !== null) {
+    sliderRange.value[1] = Math.max(Math.min(dataMax.value, ms), sliderRange.value[0]);
+  } else {
+    toInput.value = formatTime(sliderRange.value[1]);
+  }
+}
+
+// keep inputs in sync when slider moves
+watch(sliderRange, ([min, max]) => {
+  fromInput.value = formatTime(min)
+  toInput.value = formatTime(max)
+}, { deep: true })
+
+watch(sliderRange, () => {
+  updateChart()
+}, { deep: true })
+
 </script>
 
 
 <template>
   <v-card elevation="2">
     <v-card-text>
-      <h1 class="mb-4 font-weight-bold">Operations Timeline</h1>
+      <h1 class="mb-4">Operations Timeline</h1>
 
       <v-skeleton-loader v-if="!loaded" type="image, paragraph" />
 
       <div v-else>
-        <canvas ref="canvasRef" class="timeline-canvas" />
+        <canvas ref="canvasRef" class="timeline-canvas"></canvas>
 
         <v-row align="center" class="mt-4">
           <v-col cols="10">
             <v-range-slider v-model="sliderRange" :min="dataMin" :max="dataMax" :step="stepSize" hide-details dense
               thumb-label>
               <template #append>
-                <span>
-                  {{ formatTime(sliderRange[0]) }}
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <input type="text" v-model="fromInput" @blur="onFromBlur" @keyup.enter.prevent="onFromBlur"
+                    :style="{ width: '5em', fontSize: '0.9em' }" />
                   —
-                  {{ formatTime(sliderRange[1]) }}
-                </span>
+                  <input type="text" v-model="toInput" @blur="onToBlur" @keyup.enter.prevent="onToBlur"
+                    :style="{ width: '5em', fontSize: '0.9em' }" />
+                </div>
               </template>
             </v-range-slider>
           </v-col>
+
           <v-col cols="2" class="text-center">
             <v-btn color="primary" small @click="resetView">
               Auto-fit
@@ -302,6 +356,6 @@ onBeforeUnmount(() => {
 <style scoped>
 .timeline-canvas {
   width: 100% !important;
-  height: 400px;
+  height: 300px;
 }
 </style>
