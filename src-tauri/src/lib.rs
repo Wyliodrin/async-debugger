@@ -29,6 +29,10 @@ pub async fn run() {
 
     // Clone for ui_updates
     let ui_state_manager = shared_state.clone();
+
+    //Clone for spy_updates
+    let spy_state = shared_state.clone();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(shared_state)
@@ -54,6 +58,7 @@ pub async fn run() {
                     ui_state_manager.emit_update_tasks(&app_handle).await;
                     ui_state_manager.emit_update_resources(&app_handle).await;
                     ui_state_manager.emit_update_polls(&app_handle).await;
+                    ui_state_manager.emit_update_tasks_op(&app_handle).await;
                 }
             });
 
@@ -61,10 +66,16 @@ pub async fn run() {
             let window_clone = window.clone();
             async_runtime::spawn(async move {
                 while let Some((id, spy_evt)) = spy_rx.recv().await {
-                    let payload = serde_json::json!({
-                      "id":    id.to_string(),
-                      "event": spy_evt,
+                    let mut payload = serde_json::json!({
+                    "id":    id.to_string(),
+                    "event": spy_evt,
                     });
+                    if let Some(app_name) = spy_state.state.get_application_name_by_id(&id).await {
+                        payload = serde_json::json!({
+                        "id":    app_name,
+                        "event": spy_evt,
+                        });
+                    }
                     if let Err(e) = window_clone.emit("spy:event", payload) {
                         eprintln!("failed to emit spy:event: {e:?}");
                     }

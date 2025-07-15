@@ -1,5 +1,12 @@
 use crate::{
-    domain::{application::Application, poll::Poll, resource::Resource, storable::Storable, Task},
+    domain::{
+        application::Application,
+        async_op::{AsyncOp, TaskOp},
+        poll::Poll,
+        resource::Resource,
+        storable::Storable,
+        Task,
+    },
     error::Error as TraceError,
     infra::{guard::WriteableDataBaseGuard, storage::Storage},
 };
@@ -23,6 +30,10 @@ pub(crate) struct Database {
     resources: tokio::sync::RwLock<HashMap<String, Arc<Resource>>>,
     //polls list
     polls: tokio::sync::RwLock<Vec<Arc<Poll>>>,
+    //async ops list
+    async_ops: tokio::sync::RwLock<HashMap<String, Arc<AsyncOp>>>,
+    //tasks ops
+    tasks_ops: tokio::sync::RwLock<HashMap<String, Arc<TaskOp>>>,
 }
 
 impl Database {
@@ -41,6 +52,8 @@ impl Database {
             tasks: RwLock::new(HashMap::new()),
             resources: RwLock::new(HashMap::new()),
             polls: RwLock::new(Vec::new()),
+            async_ops: RwLock::new(HashMap::new()),
+            tasks_ops: RwLock::new(HashMap::new()),
         }
     }
 
@@ -140,12 +153,49 @@ impl Database {
             resources.values().len()
         );
 
+        let async_ops: HashMap<String, Arc<AsyncOp>> =
+            match AsyncOp::load_all(storage_folder.clone()).await {
+                Ok(async_ops) => async_ops
+                    .into_iter()
+                    .map(|(id, async_op)| (id, Arc::new(async_op)))
+                    .collect(),
+                Err(error) => match error {
+                    TraceError::PathNotFound(_) => {
+                        debug!("Async_op file not found, using empty list");
+                        HashMap::new()
+                    }
+                    _ => {
+                        error!("Failed to load polls due to {error:?}");
+                        return Err(error);
+                    }
+                },
+            };
+
+        let tasks_ops = match TaskOp::load_all(storage_folder.clone()).await {
+            Ok(tasks_ops) => tasks_ops
+                .into_iter()
+                .map(|(id, task_op)| (id, Arc::new(task_op)))
+                .collect(),
+            Err(error) => match error {
+                TraceError::PathNotFound(_) => {
+                    debug!("Tasks_op file not found, using empty list");
+                    HashMap::new()
+                }
+                _ => {
+                    error!("Failed to load polls due to {error:?}");
+                    return Err(error);
+                }
+            },
+        };
+
         Ok(Self {
             storage_folder,
             applications: RwLock::new(applications),
             tasks: RwLock::new(tasks),
             resources: RwLock::new(resources),
             polls: RwLock::new(polls),
+            async_ops: RwLock::new(async_ops),
+            tasks_ops: RwLock::new(tasks_ops),
         })
     }
 }
@@ -206,6 +256,34 @@ impl Storage for Database {
         WriteableDataBaseGuard {
             folder: &self.storage_folder,
             title: "polls",
+            elements,
+        }
+    }
+
+    async fn async_ops_read(&self) -> HashMap<String, Arc<AsyncOp>> {
+        self.async_ops.read().await.clone()
+    }
+
+    async fn async_ops_write(&self) -> WriteableDataBaseGuard<'_, HashMap<String, Arc<AsyncOp>>> {
+        let elements = self.async_ops.write().await;
+
+        WriteableDataBaseGuard {
+            folder: &self.storage_folder,
+            title: "async_ops",
+            elements,
+        }
+    }
+
+    async fn tasks_ops_read(&self) -> HashMap<String, Arc<TaskOp>> {
+        self.tasks_ops.read().await.clone()
+    }
+
+    async fn tasks_ops_write(&self) -> WriteableDataBaseGuard<'_, HashMap<String, Arc<TaskOp>>> {
+        let elements = self.tasks_ops.write().await;
+
+        WriteableDataBaseGuard {
+            folder: &self.storage_folder,
+            title: "tasks_ops",
             elements,
         }
     }

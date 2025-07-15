@@ -68,10 +68,10 @@ impl SpySender {
         &self,
         (id, evt): (Uuid, Event),
     ) -> Result<(), mpsc::error::SendError<(Uuid, Event)>> {
-        self.inner.send((id, evt.clone())).await?;
-        let spy_evt = SpyEvent::from(evt);
+        self.inner.send((id, evt)).await?;
+        //let spy_evt = SpyEvent::from(evt);
         // we ignore any error on the spy side
-        let _ = self.spy.send((id, spy_evt)).await;
+        //let _ = self.spy.send((id, spy_evt)).await;
         Ok(())
     }
 

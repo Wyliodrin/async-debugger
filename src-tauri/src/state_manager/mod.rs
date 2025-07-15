@@ -111,7 +111,13 @@ impl StateManager {
                                 }
                             };
 
-                            tokio::join!(task_future, resource_future);
+                            let async_op_future = async {
+                                if let Some(async_op_update) = update.async_op_update{
+                                    self.state.handle_async_op_update(app_id, async_op_update).await;
+                                }
+                            };
+
+                            tokio::join!(task_future, resource_future, async_op_future);
                         },
 
                         Event::ApplicationUpdated(update) => {
@@ -249,6 +255,11 @@ impl StateManager {
     pub async fn emit_update_polls(&self, app_handle: &AppHandle) {
         let polls = self.state.get_polls().await;
         app_handle.emit("update:polls", polls).ok();
+    }
+
+    pub async fn emit_update_tasks_op(&self, app_handle: &AppHandle) {
+        let tasks_op = self.state.get_tasks_ops().await;
+        app_handle.emit("update:tasks_ops", tasks_op).ok();
     }
 
     // pub async fn emit_connection_update(&self, app_id: )

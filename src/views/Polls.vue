@@ -11,7 +11,7 @@ const dataStore = useDataStore();
 const pollsHeaders = ref<DataTableHeader[]>([
     { title: "Received at", key: "received_at", align: "center"},
     { title: "Poll Type", key: "poll_type", align:"center" },
-    { title: "ID", key: "resource_id", align: "center" },
+    { title: "Resource ID", key: "resource_id", align: "center" },
     { title: "TaskID", key: "task_id", align: "center" },
     { title: "isReady?", key: "is_ready", align: "center" },
     { title: "Location", key: "location", align: "center" },

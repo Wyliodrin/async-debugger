@@ -2,6 +2,7 @@ use super::connection_manager::{AppUpdate, Connection};
 use super::database::Database;
 use crate::common::get_pid_hosting_at;
 use crate::domain::application::{ApplicationState, ConnectionStatus};
+use crate::domain::async_op::{CPUOverview, TaskOp, TimeStamp};
 use crate::domain::resource::ResourceStatus;
 use crate::domain::{duration::Duration, TaskState};
 use crate::error::Error as TraceError;
@@ -10,10 +11,12 @@ use crate::infra::storage::Storage;
 use crate::{
     domain::{application::Application, poll::Poll, resource::Resource, Task},
     mappers::{
-        poll::map_to_domain_poll, resources::map_to_domain_resource, tasks::map_to_domain_task,
+        async_ops::map_to_domain_async_op, poll::map_to_domain_poll,
+        resources::map_to_domain_resource, tasks::map_to_domain_task,
     },
 };
 use chrono::{DateTime, Local, TimeZone, Utc};
+use console_api::async_ops::AsyncOpUpdate;
 use console_api::resources::ResourceUpdate;
 use console_api::tasks::TaskUpdate;
 use log::{debug, error, info, warn};
@@ -89,6 +92,14 @@ impl State {
     }
 
     // region APPLICATIONS
+
+    pub async fn get_application_name_by_id(&self, id: &Uuid) -> Option<String> {
+        if let Some(app) = self.database.applications_read().await.get(&id) {
+            Some(app.title().to_string())
+        } else {
+            None
+        }
+    }
 
     pub async fn get_current_applications_list(&self) -> Vec<Arc<Application>> {
         self.database
@@ -539,6 +550,159 @@ impl State {
 
     pub async fn get_polls(&self) -> Vec<Arc<Poll>> {
         self.database.polls_read().await
+    }
+    //endregion
+
+    //region Async op
+    pub async fn handle_async_op_update(&self, app_id: Uuid, async_op_update: AsyncOpUpdate) {
+        if async_op_update.dropped_events > 0 {
+            println!(
+                "missed async_op updates: {:?}",
+                async_op_update.dropped_events
+            );
+        }
+
+        if let Some(app) = self.database.applications_read().await.get(&app_id) {
+            if app.state() == ApplicationState::Disabled {
+                // If app is disabled we dont save anything
+                return;
+            }
+
+            for raw in async_op_update.new_async_ops {
+                if let Some(mut domain_async_op) = map_to_domain_async_op(&raw) {
+                    let key = format!("{}.{}", app.title(), domain_async_op.resource_id);
+                    if let Some(resource) = self.database.resources_read().await.get(&key) {
+                        domain_async_op.resource_target = resource.target.clone();
+                        self.database.async_ops_write().await.insert(
+                            format!("{}.{}", app.title(), domain_async_op.id),
+                            Arc::new(domain_async_op),
+                        );
+                    }
+                }
+            }
+
+            for (id, updated_async_op) in async_op_update.stats_update {
+                let key = format!("{}.{}", app.title(), id);
+                let resource_target;
+                if let Some(async_op) = self.database.async_ops_read().await.get(&key) {
+                    let resource_id = async_op.resource_id;
+                    let key = format!("{}.{}", app.title(), resource_id);
+                    if let Some(resource) = self.database.resources_read().await.get(&key) {
+                        resource_target = resource.target.clone();
+                    } else {
+                        resource_target = None;
+                    }
+                } else {
+                    resource_target = None;
+                }
+                match (updated_async_op.task_id, updated_async_op.poll_stats) {
+                    (Some(task_id), Some(poll_stats)) => {
+                        if let Some(started_at) = poll_stats.last_poll_started {
+                            let key = format!("{}.{}", app.title(), task_id.id);
+                            let mut map = self.database.tasks_ops_write().await;
+                            if let Some(task_op) = map.get_mut(&key) {
+                                let task_op = Arc::make_mut(task_op);
+                                if let Some(last_element) = task_op.operations.last_mut() {
+                                    let overview_started_at =
+                                        last_element.started_at.as_ref().unwrap();
+
+                                    if started_at.nanos == overview_started_at.nanos
+                                        && started_at.seconds == overview_started_at.seconds
+                                    {
+                                        if poll_stats.last_poll_ended.is_some()
+                                            && last_element.stopped_at.is_none()
+                                        {
+                                            last_element.stopped_at = Some(TimeStamp {
+                                                seconds: poll_stats
+                                                    .last_poll_ended
+                                                    .unwrap()
+                                                    .seconds,
+                                                nanos: poll_stats.last_poll_ended.unwrap().nanos,
+                                            });
+                                        } else {
+                                            continue;
+                                        }
+                                    } else {
+                                        if poll_stats.last_poll_ended.is_some() {
+                                            task_op.operations.push(CPUOverview {
+                                                started_at: Some(TimeStamp {
+                                                    seconds: started_at.seconds,
+                                                    nanos: started_at.nanos,
+                                                }),
+                                                stopped_at: Some(TimeStamp {
+                                                    seconds: poll_stats
+                                                        .last_poll_ended
+                                                        .unwrap()
+                                                        .seconds,
+                                                    nanos: poll_stats
+                                                        .last_poll_ended
+                                                        .unwrap()
+                                                        .nanos,
+                                                }),
+                                                resource_target,
+                                            });
+                                        } else {
+                                            task_op.operations.push(CPUOverview {
+                                                started_at: Some(TimeStamp {
+                                                    seconds: started_at.seconds,
+                                                    nanos: started_at.nanos,
+                                                }),
+                                                stopped_at: None,
+                                                resource_target,
+                                            });
+                                        }
+                                    }
+                                }
+                            } else {
+                                let mut operations = Vec::new();
+                                if poll_stats.last_poll_ended.is_some() {
+                                    operations.push(CPUOverview {
+                                        started_at: Some(TimeStamp {
+                                            seconds: started_at.seconds,
+                                            nanos: started_at.nanos,
+                                        }),
+                                        stopped_at: Some(TimeStamp {
+                                            seconds: poll_stats.last_poll_ended.unwrap().seconds,
+                                            nanos: poll_stats.last_poll_ended.unwrap().nanos,
+                                        }),
+                                        resource_target,
+                                    });
+                                } else {
+                                    operations.push(CPUOverview {
+                                        started_at: Some(TimeStamp {
+                                            seconds: started_at.seconds,
+                                            nanos: started_at.nanos,
+                                        }),
+                                        stopped_at: None,
+                                        resource_target,
+                                    });
+                                }
+
+                                let task_op = TaskOp {
+                                    task_id: task_id.id,
+                                    operations: operations.clone(),
+                                };
+
+                                map.insert(
+                                    format!("{}.{}", app.title(), task_id.id),
+                                    Arc::new(task_op),
+                                );
+                            }
+                        }
+                    }
+                    _ => continue,
+                };
+            }
+        }
+    }
+
+    pub async fn get_tasks_ops(&self) -> Vec<Arc<TaskOp>> {
+        self.database
+            .tasks_ops_read()
+            .await
+            .values()
+            .cloned()
+            .collect()
     }
     //endregion
 }

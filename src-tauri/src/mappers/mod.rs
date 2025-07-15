@@ -1,3 +1,4 @@
+pub(crate) mod async_ops;
 pub(crate) mod poll;
 pub(crate) mod resources;
 pub(crate) mod tasks;
