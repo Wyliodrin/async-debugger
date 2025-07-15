@@ -40,15 +40,6 @@ function toMillis(ts: TimeStamp | null) {
   return ts.seconds * 1000 + ts.nanos / 1_000_000
 }
 
-interface Operation {
-  start: number
-  end: number
-  type: string
-}
-interface Task {
-  name: string
-  operations: Operation[]
-}
 interface OpDatum {
   x: [number, number]
   y: string
@@ -210,7 +201,7 @@ function updateChart() {
   if (!chart) return
 
   // swap in the new data
-  chart.data.datasets[0].data = buildDataset()
+  chart.data.datasets[0]!.data = buildDataset()
   chart.options.scales!['x']!.min = sliderRange.value[0]
   chart.options.scales!['x']!.max = sliderRange.value[1]
   chart.update('none')
