@@ -3,11 +3,13 @@ export type Task = {
     id: number,
     tid: number,
     name: string,
+    color: string,
     kind: string,
     state: string,
     runtime: string,
     scheduled: string,
     idle: string,
     busy: string,
-    location: string
+    location: string,
+    created_at: string,
 };

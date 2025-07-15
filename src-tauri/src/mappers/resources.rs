@@ -3,7 +3,22 @@ use console_api::resources;
 use console_api::resources::resource::kind;
 
 pub fn map_to_domain_resource(resource: &resources::Resource) -> Option<Resource> {
-    let mut location = resource.location.as_ref().map(|loc| loc.to_string());
+    let mut location = resource.location.as_ref().map(|loc| {
+        let full_path = loc.file();
+        let path = std::path::Path::new(full_path);
+
+        let directory = path.parent().and_then(|p| p.to_str()).unwrap_or("");
+        let filename = path.file_name().and_then(|f| f.to_str()).unwrap_or("");
+
+        format!(
+            "{}{}<b>{}</b>:<b>{}</b>:{}",
+            directory,
+            std::path::MAIN_SEPARATOR,
+            filename,
+            loc.line(),
+            loc.column()
+        )
+    });
     if location.is_none() {
         location = Some("Unknown".into());
     }

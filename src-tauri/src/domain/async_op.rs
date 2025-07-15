@@ -28,6 +28,8 @@ pub(crate) struct CPUOverview {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub(crate) struct TaskOp {
     pub task_id: u64,
+    pub task_name: Option<String>,
+    pub task_color: Option<String>,
     pub operations: Vec<CPUOverview>,
 }
 
@@ -45,7 +47,7 @@ impl Storable<HashMap<String, AsyncOp>> for AsyncOp {
 
 #[async_trait]
 impl Storable<HashMap<String, TaskOp>> for TaskOp {
-    const FILE_EXTENSION: &str = "tasks_op.json";
+    const FILE_EXTENSION: &str = "tasks_ops.json";
 
     async fn load_all(path: String) -> Result<HashMap<String, TaskOp>, TraceError> {
         let s = read_file(&format!("{}/{}", path, Self::FILE_EXTENSION)).await?;

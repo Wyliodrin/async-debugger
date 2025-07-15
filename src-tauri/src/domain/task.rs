@@ -22,6 +22,7 @@ pub struct Task {
     pub id: u64,
     pub tid: Option<u64>,
     pub name: Option<String>,
+    pub color: Option<String>,
     pub kind: Option<String>,
     pub state: TaskState,
     pub runtime: Option<Duration>,

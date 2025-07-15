@@ -3,6 +3,7 @@ import { Task } from "@/types/tasks";
 import { Poll } from "@/types/polls";
 import { defineStore } from "pinia";
 import { ref } from "vue";
+import { invoke } from "@tauri-apps/api/core";
 
 export const useDataStore = defineStore('data', () => {
     const pause = ref(false);
@@ -40,6 +41,18 @@ export const useDataStore = defineStore('data', () => {
         }
     }
 
+    async function editTask(task_id: number, task_name: string, task_color:string, app_name: string) {
+        await invoke('edit_task', {taskId: task_id, taskName: task_name, taskColor: task_color, appName: app_name}).then(
+            () => {
+                console.log("numele task-ului modificat cu succes");
+            }
+        ).catch(
+            (error) => {
+                console.log(task_id.toString() + "nu s-a putut modifica numele task-ului eroare:" + error);
+            }
+        );
+    }
+
     const resources = ref<Resource[]>([]);
 
     function handleResourceUpdate(e: {payload: any[]}) {
@@ -69,6 +82,6 @@ export const useDataStore = defineStore('data', () => {
 
 
     return {pause, togglePause, tasks, handleTaskUpdate, resources,
-        handleResourceUpdate, polls, handlePollUpdate
+        handleResourceUpdate, polls, handlePollUpdate, editTask,
     };
 });

@@ -96,6 +96,10 @@ listen<any[]>('update:resources', e => {
             {{ item.status }}
           </v-chip>
         </template>
+
+        <template #item.location="{ item }">
+            <span v-html="item.location"></span>
+        </template>
       </v-data-table>
     </v-card-text>
   </v-card>

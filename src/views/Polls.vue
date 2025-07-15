@@ -11,9 +11,9 @@ const dataStore = useDataStore();
 const pollsHeaders = ref<DataTableHeader[]>([
     { title: "Received at", key: "received_at", align: "center"},
     { title: "Poll Type", key: "poll_type", align:"center" },
-    { title: "Resource ID", key: "resource_id", align: "center" },
-    { title: "TaskID", key: "task_id", align: "center" },
-    { title: "isReady?", key: "is_ready", align: "center" },
+    { title: "Resource Name", key: "resource_name", align: "center" },
+    { title: "Task", key: "task_name", align: "center" },
+    { title: "Status", key: "is_ready", align: "center" },
     { title: "Location", key: "location", align: "center" },
 ]);
 
@@ -31,7 +31,9 @@ const filteredPolls = computed(() => {
       return (
         p.poll_type.toLowerCase().includes(q) ||
         p.resource_id.toString().includes(q)     ||
+        p.resource_name.toString().includes(q) ||
         p.task_id.toString().includes(q)          ||
+        p.task_name.toString().includes(q) ||
         p.location.toLowerCase().includes(q)
       )
     })
@@ -83,8 +85,42 @@ listen<any[]>('update:polls', e => {
             size="small"
             class="text-uppercase"
           >
-            {{ item.is_ready }}
+            {{ item.is_ready ? 'Ready' : 'Not Ready' }}
           </v-chip>
+        </template>
+
+        <template #item.received_at="{ item }">
+          <span v-html="item.received_at"></span>
+        </template>
+
+        <template #item.resource_name="{ item }">
+          <v-tooltip location="bottom">
+            <template #activator="{ props }">
+              <span v-bind="props">
+                {{ item.resource_name }}
+              </span>
+            </template>
+            <span>ID:{{ item.resource_id }}</span>
+          </v-tooltip>
+        </template>
+
+        <template #item.location="{ item }">
+          <span v-html="item.location"></span>
+        </template>
+
+        <template #item.task_name="{ item }">
+          <v-tooltip location="bottom">
+            <template #activator="{ props }">
+              <v-chip
+              :color="item.task_color? item.task_color : 'gray'"
+              size="small">
+                <span v-bind="props">
+                  {{ item.task_name? item.task_name : item.task_id }}
+                </span>
+              </v-chip>
+            </template>
+            <span>ID:{{ item.task_id }}</span>
+          </v-tooltip>
         </template>
       </v-data-table>
     </v-card-text>

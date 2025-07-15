@@ -285,7 +285,7 @@ impl State {
                             .single()
                             .expect("timestamp invalid");
 
-                        let pretty = dt_local.format("%d/%m/%y %H:%M:%S.%f").to_string();
+                        let pretty = dt_local.format("%d/%m/%y %H:%M:<b>%S</b>.%f").to_string();
                         task.created_at = Some(pretty);
                     }
                 }
@@ -362,6 +362,39 @@ impl State {
                     reason: None,
                 };
             }
+        }
+    }
+
+    pub async fn rename_task(
+        &self,
+        task_id: u64,
+        task_name: String,
+        task_color: String,
+        app_name: String,
+    ) {
+        let key = format!("{}.{}", app_name, task_id);
+        let mut tasks = self.database.tasks_write().await;
+        if let Some(task_arc) = tasks.get_mut(&key) {
+            let task = Arc::make_mut(task_arc);
+            task.name = Some(task_name.clone());
+            task.color = Some(task_color.clone());
+        }
+
+        let mut polls = self.database.polls_write().await;
+        polls
+            .iter_mut()
+            .filter(|poll| poll.task_id == Some(task_id))
+            .for_each(|poll_arc| {
+                let mut updated_poll = (**poll_arc).clone();
+                updated_poll.task_name = Some(task_name.clone());
+                updated_poll.task_color = Some(task_color.clone());
+                *poll_arc = Arc::new(updated_poll);
+            });
+
+        if let Some(task_op_arc) = self.database.tasks_ops_write().await.get_mut(&key) {
+            let task_op = Arc::make_mut(task_op_arc);
+            task_op.task_name = Some(task_name.clone());
+            task_op.task_color = Some(task_color.clone());
         }
     }
 
@@ -517,6 +550,9 @@ impl State {
                             if let Some(loc) = resource_arc.location.clone() {
                                 domain_poll.location = Some(loc);
                             }
+                            if let Some(name) = resource_arc.target.clone() {
+                                domain_poll.resource_name = Some(name);
+                            }
                         }
 
                         info!(
@@ -524,6 +560,16 @@ impl State {
                             app.title(),
                             app_id
                         );
+                    }
+
+                    if let Some(task_id) = domain_poll.task_id {
+                        let key = format!("{}.{}", app.title(), task_id);
+                        let tasks = self.database.tasks_read().await;
+                        if let Some(task_arc) = tasks.get(&key) {
+                            if let Some(task_name) = task_arc.name.clone() {
+                                domain_poll.task_name = Some(task_name);
+                            }
+                        }
                     }
 
                     if let Some(received_time) = received_at.clone() {
@@ -584,9 +630,11 @@ impl State {
             for (id, updated_async_op) in async_op_update.stats_update {
                 let key = format!("{}.{}", app.title(), id);
                 let resource_target;
+
                 if let Some(async_op) = self.database.async_ops_read().await.get(&key) {
                     let resource_id = async_op.resource_id;
                     let key = format!("{}.{}", app.title(), resource_id);
+
                     if let Some(resource) = self.database.resources_read().await.get(&key) {
                         resource_target = resource.target.clone();
                     } else {
@@ -678,8 +726,21 @@ impl State {
                                     });
                                 }
 
+                                let task_name;
+                                let task_color;
+                                let key = format!("{}.{}", app.title(), task_id.id);
+                                if let Some(task) = self.database.tasks_read().await.get(&key) {
+                                    task_name = task.name.clone();
+                                    task_color = task.color.clone();
+                                } else {
+                                    task_name = None;
+                                    task_color = None;
+                                }
+
                                 let task_op = TaskOp {
                                     task_id: task_id.id,
+                                    task_name,
+                                    task_color,
                                     operations: operations.clone(),
                                 };
 

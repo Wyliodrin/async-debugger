@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, Ref } from 'vue'
 import { listen } from '@tauri-apps/api/event'
 import type { DataTableHeader } from 'vuetify'
 import { useDataStore } from '@/stores/data'
+import { Task } from '@/types/tasks'
 
 const tasksSearch  = ref('')
 const selectedApp  = ref('All')
 const dataStore = useDataStore();
+const dialog = ref(false);
 
 const appList = computed(() => {
   const names  = dataStore.tasks.map(t => t.app_name)
@@ -53,6 +55,53 @@ function getTaskChipColor(stateOrKind: string) {
   }
 }
 
+const editedItem: Ref<{
+    app_name: string,
+    id: any;
+    name: any;
+    color: string,
+}> = ref({
+    app_name: '',
+    id: '',
+    name: '',
+    color: '',
+});
+
+const defaultItem: Ref<{
+    app_name: string,
+    id: any;
+    name: any;
+    color: string,
+}> = ref({
+    app_name: '',
+    id: '',
+    name: '',
+    color: '',
+});
+
+function close() {
+    dialog.value = false;
+
+    editedItem.value = Object.assign({}, defaultItem.value);
+}
+
+async function save() {
+    dialog.value = false;
+    dataStore.editTask(editedItem.value.id, editedItem.value.name, editedItem.value.color, editedItem.value.app_name);
+    close();
+}
+
+function editTask(task: Task){
+    const { id, name, app_name } = task;
+
+    editedItem.value.id = id;
+    editedItem.value.app_name = app_name;
+    editedItem.value.name = name;
+
+    dialog.value = true;
+
+}
+
 
 
 listen<any[]>('update:tasks', e => {
@@ -62,7 +111,47 @@ listen<any[]>('update:tasks', e => {
 
 <template>
   <v-card elevation="2">
-    <v-card-text>
+      <v-dialog v-model="dialog" max-width="500" persistent>
+          <v-card v-click-outside="close">
+              <v-card-title class="pa-4 bg-primary">
+                  <span class="title text-white">Change name of the task</span>
+              </v-card-title>
+
+              <v-card-text>
+                <v-form ref="form" lazy-validation @submit.prevent>
+                  <v-row align="center">
+                    <v-col cols="12">
+                      <v-text-field
+                        variant="outlined"
+                        hide-details
+                        v-model="editedItem.name"
+                        label="Task Name"
+                      ></v-text-field>
+                    </v-col>
+
+                    <v-col cols="12">
+                      <v-color-picker
+                        v-model="editedItem.color"
+                        flat
+                        hide-canvas
+                        hide-inputs
+                        show-swatches
+                        swatches-max-height="150"
+                      ></v-color-picker>
+                    </v-col>
+                  </v-row>
+                </v-form>
+              </v-card-text>
+
+              <v-card-actions class="pa-4">
+                  <v-spacer></v-spacer>
+                  <v-btn color="error" variant="flat" @click="close">Cancel</v-btn>
+                  <v-btn color="primary" :disabled="editedItem.name === ''" variant="flat"
+                      @click="save">Save</v-btn>
+              </v-card-actions>
+          </v-card>
+      </v-dialog>
+      <v-card-text>
       <h1 class="mb-4 font-weight-bold">Tasks Overview</h1>
 
       <div class="d-flex align-center justify-space-between mb-4">
@@ -112,6 +201,29 @@ listen<any[]>('update:tasks', e => {
           >
             {{ item.state }}
           </v-chip>
+        </template>
+
+        <template #item.created_at="{ item }">
+          <span v-html="item.created_at"></span>
+        </template>
+
+        <template #item.location="{ item }">
+          <span v-html="item.location"></span>
+        </template>
+
+        <template #item.name="{ item }">
+          <v-chip
+              :color="item.color ? item.color : 'gray'"
+              size="small">
+                {{ item.name? item.name : "No name" }}
+         </v-chip>
+          <v-tooltip text="Edit">
+              <template v-slot:activator="{ props }">
+                  <v-btn icon flat @click="editTask(item)" v-bind="props">
+                      <PencilIcon stroke-width="1.5" size="20" class="text-primary" />
+                  </v-btn>
+              </template>
+          </v-tooltip>
         </template>
       </v-data-table>
     </v-card-text>

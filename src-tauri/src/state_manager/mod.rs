@@ -101,7 +101,7 @@ impl StateManager {
                                                 .timestamp_opt(received_update_time.seconds, received_update_time.nanos as u32)
                                                 .single()
                                                 .expect("timestamp invalid");
-                                            let pretty = dt_local.format("%d/%m/%y %H:%M:%S.%f").to_string();
+                                            let pretty = dt_local.format("%d/%m/%y %H:%M:<b>%S</b>.%f").to_string();
                                             Some(pretty)
                                         } else {
                                             None
