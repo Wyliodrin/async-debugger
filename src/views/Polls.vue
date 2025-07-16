@@ -105,7 +105,18 @@ listen<any[]>('update:polls', e => {
         </template>
 
         <template #item.location="{ item }">
-          <span v-html="item.location"></span>
+          <v-chip
+            v-if="item.location === 'Unknown'"
+            color="grey"
+            size="small"
+          >
+            Unknown
+          </v-chip>
+
+          <span
+            v-else
+            v-html="item.location"
+          ></span>
         </template>
 
         <template #item.task_name="{ item }">

@@ -285,7 +285,16 @@ impl State {
                             .single()
                             .expect("timestamp invalid");
 
-                        let pretty = dt_local.format("%d/%m/%y %H:%M:<b>%S</b>.%f").to_string();
+                        let pretty = format!(
+                            r#"<div class="timestamp-chips">
+                                <span class="timestamp-chip timestamp-chip--date">{}</span>
+                                <span class="timestamp-chip timestamp-chip--time">{}:<span class="timestamp-chip--seconds">{}</span><span class="timestamp-chip--ms">.{}</span></span>
+                            </div>"#,
+                            dt_local.format("%d/%m/%y"),
+                            dt_local.format("%H:%M"),
+                            dt_local.format("%S"),
+                            dt_local.format("%f")
+                        );
                         task.created_at = Some(pretty);
                     }
                 }
@@ -542,6 +551,7 @@ impl State {
             for raw in resources_update.new_poll_ops {
                 if let Some(mut domain_poll) = map_to_domain_poll(&raw) {
                     domain_poll.app_name = Some(app.title().to_string());
+                    domain_poll.received_at = received_at.clone();
 
                     if let Some(resource_id) = domain_poll.resource_id {
                         let key = format!("{}.{}", app.title(), resource_id);
@@ -570,10 +580,6 @@ impl State {
                                 domain_poll.task_name = Some(task_name);
                             }
                         }
-                    }
-
-                    if let Some(received_time) = received_at.clone() {
-                        domain_poll.received_at = Some(received_time);
                     }
 
                     self.database
