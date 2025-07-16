@@ -76,6 +76,7 @@ impl StateManager {
 
     pub async fn run(&self, mut updates_receiver: Receiver<(Uuid, Event)>) {
         self.reconnect_all_apps().await;
+        let mut skip_first_update = true;
 
         // event loop
         loop {
@@ -122,7 +123,12 @@ impl StateManager {
 
                             let async_op_future = async {
                                 if let Some(async_op_update) = update.async_op_update{
-                                    self.state.handle_async_op_update(app_id, async_op_update).await;
+                                    if skip_first_update {
+                                        skip_first_update = false;
+                                    }
+                                    else{
+                                        self.state.handle_async_op_update(app_id, async_op_update).await;
+                                    }
                                 }
                             };
 
