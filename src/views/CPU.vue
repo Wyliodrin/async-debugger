@@ -54,15 +54,17 @@ const rawOps = ref<TaskOpMap>({})
 const canvasRef = ref<HTMLCanvasElement>()
 let chart: Chart<'bar'> | null = null
 
-// derive tasks/time bounds exactly as you had them
 const tasks = computed(() => {
-  return Object.entries(rawOps.value).map(([name, entry]) => ({
-    name,
-    operations: entry.operations
+  return Object.entries(rawOps.value).map(([key, taskOp], idx) => ({
+    displayName:
+      taskOp.task_name && taskOp.task_name.trim().length > 0
+        ? taskOp.task_name
+        : key || String(idx),
+    operations: taskOp.operations
       .filter(o => o.started_at && o.stopped_at)
       .map(o => ({
-        start: toMillis(o.started_at),
-        end: toMillis(o.stopped_at),
+        start: toMillis(o.started_at!),
+        end: toMillis(o.stopped_at!),
         type: o.resource_target ?? 'unknown'
       }))
   }))
@@ -115,13 +117,13 @@ const typeColors = computed(() => {
 })
 
 function buildDataset(): OpDatum[] {
-  return tasks.value.flatMap((task) =>
-    task.operations.map((op, i) => {
+  return tasks.value.flatMap(task =>
+    task.operations.map((op, opIndex) => {
       const { bg, border } = typeColors.value[op.type]!
       return {
         x: [op.start, op.end],
-        y: task.name,
-        label: `${op.type.charAt(0) || '#'}${i + 1}`,
+        y: task.displayName,
+        label: `${op.type.charAt(0) || '#'}${opIndex + 1}`,
         backgroundColor: bg,
         borderColor: border,
         borderWidth: 1
@@ -142,7 +144,8 @@ const chartOptions = computed<ChartOptions<'bar'>>(() => ({
     },
     y: {
       type: 'category',
-      title: { display: true, text: 'Task' }
+      title: { display: true, text: 'Task' },
+      labels: tasks.value.map(t => t.displayName),
     }
   },
   plugins: {
@@ -183,29 +186,41 @@ const chartOptions = computed<ChartOptions<'bar'>>(() => ({
 
 function initChart() {
   if (!canvasRef.value || chart) return
+
+  const labels = tasks.value.map(t => t.displayName)
+
   chart = new Chart(canvasRef.value, {
     type: 'bar',
     data: {
+      labels,
       datasets: [{
         data: buildDataset(),
-        backgroundColor: (ctx) => (ctx.raw as OpDatum).backgroundColor,
-        borderColor: (ctx) => (ctx.raw as OpDatum).borderColor,
-        borderWidth: (ctx) => (ctx.raw as OpDatum).borderWidth
+        backgroundColor: ctx => (ctx.raw as OpDatum).backgroundColor,
+        borderColor: ctx => (ctx.raw as OpDatum).borderColor,
+        borderWidth: ctx => (ctx.raw as OpDatum).borderWidth
       }]
     },
     options: chartOptions.value
   })
 }
 
+
 function updateChart() {
   if (!chart) return
 
-  // swap in the new data
+  // swap in new category labels
+  chart.data.labels = tasks.value.map(t => t.displayName)
+
+  // swap in new data points
   chart.data.datasets[0]!.data = buildDataset()
+
   chart.options.scales!['x']!.min = sliderRange.value[0]
   chart.options.scales!['x']!.max = sliderRange.value[1]
+
   chart.update('none')
 }
+
+
 
 watch(sliderRange, ([min, max]) => {
   fromInput.value = formatTime(min);
@@ -223,6 +238,7 @@ function resetView() {
 const onPayload = throttle((payload: TaskOpMap) => {
   // if the user has paused the updates, do nothing
   if (dataStore.pause) return
+
   rawOps.value = payload
   // first time ever?
   if (!loaded.value) {
@@ -236,6 +252,7 @@ const onPayload = throttle((payload: TaskOpMap) => {
     updateChart()
   }
 }, 500)
+
 // subscribe
 const unlisten = listen<TaskOpMap>('update:tasks_ops', e => onPayload(e.payload))
 onBeforeUnmount(async () => await unlisten.then(f => f()) && chart?.destroy())

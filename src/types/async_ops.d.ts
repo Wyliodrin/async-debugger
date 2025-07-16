@@ -10,7 +10,9 @@ export interface CPUOverview {
 }
 
 export interface TaskOp {
-  task_id: number;
+  task_id: string;
+  task_name: string;
+  task_colour: string;
   operations: CPUOverview[];
 }
 
