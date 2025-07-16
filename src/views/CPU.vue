@@ -54,15 +54,17 @@ const rawOps = ref<TaskOpMap>({})
 const canvasRef = ref<HTMLCanvasElement>()
 let chart: Chart<'bar'> | null = null
 
-// derive tasks/time bounds exactly as you had them
 const tasks = computed(() => {
-  return Object.entries(rawOps.value).map(([name, entry]) => ({
-    name,
-    operations: entry.operations
+  return Object.entries(rawOps.value).map(([key, taskOp], idx) => ({
+    displayName:
+      taskOp.task_name && taskOp.task_name.trim().length > 0
+        ? taskOp.task_name
+        : key || String(idx),
+    operations: taskOp.operations
       .filter(o => o.started_at && o.stopped_at)
       .map(o => ({
-        start: toMillis(o.started_at),
-        end: toMillis(o.stopped_at),
+        start: toMillis(o.started_at!),
+        end: toMillis(o.stopped_at!),
         type: o.resource_target ?? 'unknown'
       }))
   }))
@@ -115,13 +117,13 @@ const typeColors = computed(() => {
 })
 
 function buildDataset(): OpDatum[] {
-  return tasks.value.flatMap((task) =>
-    task.operations.map((op, i) => {
+  return tasks.value.flatMap(task =>
+    task.operations.map((op, opIndex) => {
       const { bg, border } = typeColors.value[op.type]!
       return {
         x: [op.start, op.end],
-        y: task.name,
-        label: `${op.type.charAt(0) || '#'}${i + 1}`,
+        y: task.displayName,
+        label: `${op.type.charAt(0) || '#'}${opIndex + 1}`,
         backgroundColor: bg,
         borderColor: border,
         borderWidth: 1
@@ -142,7 +144,8 @@ const chartOptions = computed<ChartOptions<'bar'>>(() => ({
     },
     y: {
       type: 'category',
-      title: { display: true, text: 'Task' }
+      title: { display: true, text: 'Task' },
+      labels: tasks.value.map(t => t.displayName),
     }
   },
   plugins: {
@@ -183,29 +186,41 @@ const chartOptions = computed<ChartOptions<'bar'>>(() => ({
 
 function initChart() {
   if (!canvasRef.value || chart) return
+
+  const labels = tasks.value.map(t => t.displayName)
+
   chart = new Chart(canvasRef.value, {
     type: 'bar',
     data: {
+      labels,
       datasets: [{
         data: buildDataset(),
-        backgroundColor: (ctx) => (ctx.raw as OpDatum).backgroundColor,
-        borderColor: (ctx) => (ctx.raw as OpDatum).borderColor,
-        borderWidth: (ctx) => (ctx.raw as OpDatum).borderWidth
+        backgroundColor: ctx => (ctx.raw as OpDatum).backgroundColor,
+        borderColor: ctx => (ctx.raw as OpDatum).borderColor,
+        borderWidth: ctx => (ctx.raw as OpDatum).borderWidth
       }]
     },
     options: chartOptions.value
   })
 }
 
+
 function updateChart() {
   if (!chart) return
 
-  // swap in the new data
+  // swap in new category labels
+  chart.data.labels = tasks.value.map(t => t.displayName)
+
+  // swap in new data points
   chart.data.datasets[0]!.data = buildDataset()
+
   chart.options.scales!['x']!.min = sliderRange.value[0]
   chart.options.scales!['x']!.max = sliderRange.value[1]
+
   chart.update('none')
 }
+
+
 
 watch(sliderRange, ([min, max]) => {
   fromInput.value = formatTime(min);
@@ -223,6 +238,7 @@ function resetView() {
 const onPayload = throttle((payload: TaskOpMap) => {
   // if the user has paused the updates, do nothing
   if (dataStore.pause) return
+
   rawOps.value = payload
   // first time ever?
   if (!loaded.value) {
@@ -236,6 +252,7 @@ const onPayload = throttle((payload: TaskOpMap) => {
     updateChart()
   }
 }, 500)
+
 // subscribe
 const unlisten = listen<TaskOpMap>('update:tasks_ops', e => onPayload(e.payload))
 onBeforeUnmount(async () => await unlisten.then(f => f()) && chart?.destroy())
@@ -247,20 +264,30 @@ function formatISO(ms: number) {
   return new Date(ms).toISOString().slice(11, 19)
 }
 
-function parseTimeOnBase(baseMs: number, hhmmss: string): number | null {
-  const [h, m, s] = hhmmss.split(':').map(x => Number(x));
+function parseTimeOnBase(baseMs: number, hhmmssSSS: string): number | null {
+  const parts = hhmmssSSS.split(':');
+  if (parts.length !== 3) return null;
+
+  const [hStr, mStr, sAndMs] = parts;
+  const [sStr, msStr = '0'] = sAndMs!.split('.');
+
+  const h = Number(hStr);
+  const m = Number(mStr);
+  const s = Number(sStr);
+  const ms = Number(msStr.padEnd(3, '0')); // allow 1–3 digits
+
   if (
-    hhmmss.length !== 8 ||
-    isNaN(h!) || h! < 0 || h! > 23 ||
-    isNaN(m!) || m! < 0 || m! > 59 ||
-    isNaN(s!) || s! < 0 || s! > 59
+    isNaN(h) || h < 0 || h > 23 ||
+    isNaN(m) || m < 0 || m > 59 ||
+    isNaN(s) || s < 0 || s > 59 ||
+    isNaN(ms) || ms < 0 || ms > 999
   ) {
     return null;
   }
 
   const base = new Date(baseMs);
   const out = new Date(base.getTime());
-  out.setHours(h!, m, s, 0);
+  out.setHours(h, m, s, ms);
   return out.getTime();
 }
 
@@ -270,7 +297,8 @@ function formatTime(ms: number): string {
   const hh = String(d.getHours()).padStart(2, '0');
   const mm = String(d.getMinutes()).padStart(2, '0');
   const ss = String(d.getSeconds()).padStart(2, '0');
-  return `${hh}:${mm}:${ss}`;
+  const mss = String(d.getMilliseconds()).padStart(3, '0');
+  return `${hh}:${mm}:${ss}.${mss}`;
 }
 
 
@@ -324,10 +352,10 @@ watch(sliderRange, () => {
               <template #append>
                 <div style="display: flex; align-items: center; gap: 4px;">
                   <input type="text" v-model="fromInput" @blur="onFromBlur" @keyup.enter.prevent="onFromBlur"
-                    :style="{ width: '5em', fontSize: '0.9em' }" />
+                    :style="{ width: '7.5em', fontSize: '0.9em' }" />
                   —
                   <input type="text" v-model="toInput" @blur="onToBlur" @keyup.enter.prevent="onToBlur"
-                    :style="{ width: '5em', fontSize: '0.9em' }" />
+                    :style="{ width: '7.5em', fontSize: '0.9em' }" />
                 </div>
               </template>
             </v-range-slider>
