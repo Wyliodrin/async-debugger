@@ -264,20 +264,30 @@ function formatISO(ms: number) {
   return new Date(ms).toISOString().slice(11, 19)
 }
 
-function parseTimeOnBase(baseMs: number, hhmmss: string): number | null {
-  const [h, m, s] = hhmmss.split(':').map(x => Number(x));
+function parseTimeOnBase(baseMs: number, hhmmssSSS: string): number | null {
+  const parts = hhmmssSSS.split(':');
+  if (parts.length !== 3) return null;
+
+  const [hStr, mStr, sAndMs] = parts;
+  const [sStr, msStr = '0'] = sAndMs!.split('.');
+
+  const h = Number(hStr);
+  const m = Number(mStr);
+  const s = Number(sStr);
+  const ms = Number(msStr.padEnd(3, '0')); // allow 1–3 digits
+
   if (
-    hhmmss.length !== 8 ||
-    isNaN(h!) || h! < 0 || h! > 23 ||
-    isNaN(m!) || m! < 0 || m! > 59 ||
-    isNaN(s!) || s! < 0 || s! > 59
+    isNaN(h) || h < 0 || h > 23 ||
+    isNaN(m) || m < 0 || m > 59 ||
+    isNaN(s) || s < 0 || s > 59 ||
+    isNaN(ms) || ms < 0 || ms > 999
   ) {
     return null;
   }
 
   const base = new Date(baseMs);
   const out = new Date(base.getTime());
-  out.setHours(h!, m, s, 0);
+  out.setHours(h, m, s, ms);
   return out.getTime();
 }
 
@@ -287,7 +297,8 @@ function formatTime(ms: number): string {
   const hh = String(d.getHours()).padStart(2, '0');
   const mm = String(d.getMinutes()).padStart(2, '0');
   const ss = String(d.getSeconds()).padStart(2, '0');
-  return `${hh}:${mm}:${ss}`;
+  const mss = String(d.getMilliseconds()).padStart(3, '0');
+  return `${hh}:${mm}:${ss}.${mss}`;
 }
 
 
@@ -341,10 +352,10 @@ watch(sliderRange, () => {
               <template #append>
                 <div style="display: flex; align-items: center; gap: 4px;">
                   <input type="text" v-model="fromInput" @blur="onFromBlur" @keyup.enter.prevent="onFromBlur"
-                    :style="{ width: '5em', fontSize: '0.9em' }" />
+                    :style="{ width: '7.5em', fontSize: '0.9em' }" />
                   —
                   <input type="text" v-model="toInput" @blur="onToBlur" @keyup.enter.prevent="onToBlur"
-                    :style="{ width: '5em', fontSize: '0.9em' }" />
+                    :style="{ width: '7.5em', fontSize: '0.9em' }" />
                 </div>
               </template>
             </v-range-slider>
