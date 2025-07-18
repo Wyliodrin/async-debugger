@@ -25,8 +25,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::fs;
 use uuid::Uuid;
 
-/// Is managing the access to the database and provides access method
-/// tailored for the applications business locic needs
+/// Manages access to persistent storage and provides high-level methods
+/// for reading and writing application, task and resource state.
 pub struct State {
     database: Arc<dyn Storage>,
 }
@@ -34,11 +34,10 @@ pub struct State {
 impl State {
     const STORAGE_FOLDER: &str = ".async-tracing";
 
-    /// Creates a new, fresh instance
-    /// Will not load the database anymore, but use empty lists for every
-    /// element
+    /// Constructs a new `State` backed by an empty in‐memory database.
     ///
-    /// Should be used in case of failure when loading
+    /// This will not load any existing data from disk. It is intended for
+    /// use when a previous load operation failed and a fresh start is required.
     pub fn new() -> Self {
         let path = dirs::home_dir().unwrap().join(Self::STORAGE_FOLDER);
         info!("Storage location is: {path:?}");
@@ -48,11 +47,16 @@ impl State {
         }
     }
 
-    /// Is loading state from previus application instance
+    /// Loads state from the file system into memory.
     ///
-    /// # Error
+    /// This will create the storage directory if it does not exist,
+    /// then load all persisted applications and tasks. Upon success,
+    /// it also refreshes process IDs of running applications.
     ///
-    /// If failed to load data from disk, will return an error
+    /// # Errors
+    ///
+    /// Returns [`TraceError::CannotCreateStorage`] if the storage directory
+    /// cannot be created, or any other error from loading the underlying database.
     pub async fn load() -> Result<State, TraceError> {
         let database_path = dirs::home_dir().unwrap().join(Self::STORAGE_FOLDER);
         info!("Storage location is: {database_path:?}");
@@ -72,14 +76,13 @@ impl State {
         let database =
             Database::load(database_path.as_path().to_string_lossy().to_string()).await?;
 
-        // Check if PIDs have changed, if so update them
+        // Refresh PIDs for applications whose host process may have changed
         let mut guard = database.applications_write().await;
         for (_uuid, app) in guard.iter_mut() {
             if let Some(pid) = get_pid_hosting_at(app.url().clone()) {
                 if app.pid() != pid {
                     debug!("Updating the PID for app {} to {}", app.title(), pid);
                     app.writeable().set_pid(pid);
-
                     debug!("Checking pid {}", app.pid());
                 }
             }
@@ -93,6 +96,12 @@ impl State {
 
     // region APPLICATIONS
 
+    /// Retrieves the title of the application identified by `id`.
+    ///
+    /// # Returns
+    ///
+    /// - `Some(String)` containing the application title if found.
+    /// - `None` if no application with that ID exists.
     pub async fn get_application_name_by_id(&self, id: &Uuid) -> Option<String> {
         if let Some(app) = self.database.applications_read().await.get(&id) {
             Some(app.title().to_string())
@@ -101,6 +110,10 @@ impl State {
         }
     }
 
+    /// Returns a list of all currently stored applications.
+    ///
+    /// The returned vector contains an `Arc<Application>` for each
+    /// application in the database.
     pub async fn get_current_applications_list(&self) -> Vec<Arc<Application>> {
         self.database
             .applications_read()
@@ -110,6 +123,10 @@ impl State {
             .collect()
     }
 
+    /// Persists a new application in the database.
+    ///
+    /// If an application with the same ID already exists, it will be
+    /// overwritten.
     pub async fn store_app(&self, application: Application) {
         self.database
             .applications_write()
@@ -117,6 +134,15 @@ impl State {
             .insert(application.id().clone(), Arc::new(application));
     }
 
+    /// Disables the application with the given `app_id`.
+    ///
+    /// This sets the internal state of the application to `Disabled`,
+    /// preventing further updates from being recorded.
+    ///
+    /// # Errors
+    ///
+    /// Always returns `Ok(())` but may fail silently if the write
+    /// lock cannot be acquired.
     pub async fn disable_app(&self, app_id: Uuid) -> Result<(), TraceError> {
         let mut guard = self.database.applications_write().await;
 
@@ -130,6 +156,11 @@ impl State {
         Ok(())
     }
 
+    /// Enables the application with the given `app_id` and sets its
+    /// connection information.
+    ///
+    /// After enabling, updates for this application will once again
+    /// be recorded.
     pub async fn enable_app(&self, app_id: Uuid, connection: Connection) {
         let mut guard = self.database.applications_write().await;
 
@@ -141,22 +172,29 @@ impl State {
         }
     }
 
+    /// Deletes the application identified by `app_id` from storage.
+    ///
+    /// All associated tasks remain in the database unless explicitly
+    /// removed by other operations.
     pub async fn delete_application(&self, app_id: Uuid) {
         self.database.applications_write().await.remove(&app_id);
     }
-
-    // pub async fn edit_application(&self, app_id: Uuid) {
-
-    // }
 
     // endregion
 
     // region TASKS
 
-    /// Receives a [`TaskUpdate`] object and applies the updates received
-    /// on the current list of tasks
+    /// Applies a batch of task updates for the application `app_id`.
+    ///
+    /// This method will:
+    /// - Insert any new tasks reported in `task_update.new_tasks`.
+    /// - Update runtime, busy time, idle time, schedule time, and
+    ///   created timestamp for existing tasks.
+    /// - Mark tasks as stopped if they have been dropped.
+    ///
+    /// If the application is currently disabled, updates are ignored.
     pub async fn handle_task_update(&self, app_id: Uuid, task_update: TaskUpdate) {
-        //debug for missed task_updates
+        // debug for missed task_updates
         if task_update.dropped_events > 0 {
             println!("missed task updates: {:?}", task_update.dropped_events);
         }
@@ -167,7 +205,7 @@ impl State {
                 return;
             }
 
-            // Saving new tasks
+            // Insert new tasks
             for raw in task_update.new_tasks {
                 if let Some(mut domain_task) = map_to_domain_task(app_id, &raw) {
                     domain_task.app_name = Some(app.title().to_string());
@@ -183,23 +221,22 @@ impl State {
                 }
             }
 
-            // Updating tasks
+            // Update existing tasks
             for (tid, updated_task) in task_update.stats_update {
                 let mut tasks_guard = self.database.tasks_write().await;
                 let key = format!("{}.{}", app.title(), tid);
                 if let Some(task_arc) = tasks_guard.get_mut(&key) {
                     let task = Arc::make_mut(task_arc);
 
-                    //handle busy time
+                    // Handle busy time
                     if let Some(poll_stats) = updated_task.poll_stats {
                         if let Some(dur) = poll_stats.busy_time {
                             task.busy = Some(Duration::new(dur.seconds, dur.nanos));
                         }
                     }
 
-                    //handle runtime and task status
+                    // Handle runtime & stop detection
                     if let Some(dropped_at) = updated_task.dropped_at {
-                        // mark it Stopped if it was still Running
                         if matches!(task.state, TaskState::Running) {
                             info!("Marking task {} as Stopped", key);
                             task.state = TaskState::Stopped {
@@ -219,6 +256,7 @@ impl State {
                             }
                         }
                     } else {
+                        // Update runtime based on current time
                         let now = SystemTime::now();
                         let duration_since_epoch =
                             now.duration_since(UNIX_EPOCH).expect("Time went backwards");
@@ -232,7 +270,7 @@ impl State {
 
                                 if nano < 0 {
                                     seconds -= 1;
-                                    nano = 1000000000 + nano;
+                                    nano = 1_000_000_000 + nano;
                                 }
 
                                 Some(Duration::new(seconds, nano))
@@ -240,12 +278,12 @@ impl State {
                         }
                     }
 
-                    //handle schedule time
+                    // Handle scheduled time
                     if let Some(scheduled) = updated_task.scheduled_time {
                         task.scheduled = Some(Duration::new(scheduled.seconds, scheduled.nanos))
                     }
 
-                    //handle idle time
+                    // Compute idle time
                     task.idle = {
                         let idle = match task.runtime.clone() {
                             Some(runtime_duration) => {
@@ -274,7 +312,7 @@ impl State {
                         idle
                     };
 
-                    //handle created_at
+                    // Format created_at timestamp if not yet set
                     if task.created_at.is_none() {
                         let created_ts = updated_task
                             .created_at
@@ -302,9 +340,10 @@ impl State {
         }
     }
 
-    /// Receives an update regarding an Application with the given [`app_id`]
-    /// The update consists in the new Application object that needs to replace
-    /// the old one
+    /// Updates CPU and memory usage for the application `app_id`.
+    ///
+    /// If the application is disabled, this update will be ignored.
+    /// If `app_id` is not found, a warning is logged.
     pub async fn handle_app_update(&self, app_id: Uuid, update: AppUpdate) {
         let mut guard = self.database.applications_write().await;
         if let Some((_uuid, app)) = guard.iter_mut().find(|(_uuid, app)| app.id().eq(&app_id)) {
@@ -324,7 +363,13 @@ impl State {
         }
     }
 
+    /// Updates connection status for the application `app_id`.
+    ///
+    /// If the status is `Disconnected` or `Error`, all running tasks for
+    /// that app are marked as stopped. If the application is disabled,
+    /// the update is ignored. If `app_id` is not found, a warning is logged.
     pub async fn handle_app_conn_update(&self, app_id: Uuid, conn_status: ConnectionStatus) {
+        // For disconnects or errors, stop all running tasks of the app
         if matches!(conn_status, ConnectionStatus::Disconnected)
             || matches!(conn_status, ConnectionStatus::Error(_))
         {
@@ -342,6 +387,7 @@ impl State {
                 }
             }
         }
+        // Update app connection status
         let mut guard = self.database.applications_write().await;
         if let Some((_uuid, app)) = guard.iter_mut().find(|(_uuid, app)| app.id().eq(&app_id)) {
             if app.state() == ApplicationState::Disabled {
@@ -357,10 +403,14 @@ impl State {
         }
     }
 
+    /// Returns all tasks currently stored in memory.
     pub async fn get_tasks(&self) -> Vec<Arc<Task>> {
         self.database.tasks_read().await.values().cloned().collect()
     }
 
+    /// Stops the task identified by `task_id` if it is currently running.
+    ///
+    /// The task state is set to `Stopped` with the current UTC timestamp.
     pub async fn stop_task(&self, task_id: &str) {
         let mut tasks = self.database.tasks_write().await;
         if let Some(task_arc) = tasks.get_mut(task_id) {
@@ -374,6 +424,21 @@ impl State {
         }
     }
 
+    /// Renames a task, updates its display color, and propagates the changes
+    /// to any related poll records and task operations.
+    ///
+    /// - `task_id`: The numeric identifier of the task within its application.
+    /// - `task_name`: The new human-readable name to assign to the task.
+    /// - `task_color`: The new color code (e.g. hex string) to use when rendering the task.
+    /// - `app_name`: The title of the application to which the task belongs.
+    ///
+    /// This method will:
+    /// 1. Look up the task in the in-memory task store and update
+    ///    its `name` and `color` fields.
+    /// 2. Iterate over all persisted polls, matching on `task_id`,
+    ///    and update each poll’s `task_name` and `task_color`.
+    /// 3. If there is an entry in the task‐operations store matching
+    ///    the same key, update its `task_name` and `task_color` as well.
     pub async fn rename_task(
         &self,
         task_id: u64,
@@ -382,6 +447,8 @@ impl State {
         app_name: String,
     ) {
         let key = format!("{}.{}", app_name, task_id);
+
+        // Update the task record itself
         let mut tasks = self.database.tasks_write().await;
         if let Some(task_arc) = tasks.get_mut(&key) {
             let task = Arc::make_mut(task_arc);
@@ -389,6 +456,7 @@ impl State {
             task.color = Some(task_color.clone());
         }
 
+        // Update all polls associated with this task
         let mut polls = self.database.polls_write().await;
         polls
             .iter_mut()
@@ -400,6 +468,7 @@ impl State {
                 *poll_arc = Arc::new(updated_poll);
             });
 
+        // Update any task-operation entries
         if let Some(task_op_arc) = self.database.tasks_ops_write().await.get_mut(&key) {
             let task_op = Arc::make_mut(task_op_arc);
             task_op.task_name = Some(task_name.clone());
@@ -409,15 +478,33 @@ impl State {
 
     // endregion
 
-    //region RESOURCES + Polls
+    // region RESOURCES + Polls
 
+    /// Processes a batch of resource updates and new poll operations for
+    /// a given application.
+    ///
+    /// - `app_id`: The UUID of the application reporting the update.
+    /// - `resources_update`: The incoming `ResourceUpdate` event payload.
+    /// - `received_at`: An optional timestamp string indicating when the
+    ///    update was received (used for labeling new polls).
+    ///
+    /// This method will:
+    /// 1. Insert any new resources into the in-memory resource store,
+    ///    tagging them with the application name.
+    /// 2. Update existing resources’ status, duration, and attribute
+    ///    fields based on the `stats_update` section.
+    /// 3. Convert any new poll operations into domain `Poll` objects,
+    ///    enriching them with known resource location, name, and task
+    ///    metadata, then append them to the poll log.
+    ///
+    /// If the application is currently disabled, all updates are ignored.
     pub async fn handle_resource_update(
         &self,
         app_id: Uuid,
         resources_update: ResourceUpdate,
         received_at: Option<String>,
     ) {
-        //debug for missed resources_updates
+        // debug for missed resources_updates
         if resources_update.dropped_events > 0 {
             println!(
                 "missed resources updates: {:?}",
@@ -427,11 +514,10 @@ impl State {
 
         if let Some(app) = self.database.applications_read().await.get(&app_id) {
             if app.state() == ApplicationState::Disabled {
-                // If app is disabled we dont save anything
                 return;
             }
 
-            // Saving new resources
+            // 1. Insert new resources
             for raw in resources_update.new_resources {
                 if let Some(mut domain_resource) = map_to_domain_resource(&raw) {
                     domain_resource.app_name = Some(app.title().to_string());
@@ -447,16 +533,15 @@ impl State {
                 }
             }
 
-            //Updating Resources
+            // 2. Update existing resources
             for (id, updated_resource) in resources_update.stats_update {
                 let mut resource_guard = self.database.resources_write().await;
                 let key = format!("{}.{}", app.title(), id);
                 if let Some(resource_arc) = resource_guard.get_mut(&key) {
                     let resource = Arc::make_mut(resource_arc);
 
-                    //handle duration resource
+                    // Handle dropped vs. running durations
                     if let Some(dropped_at) = updated_resource.dropped_at {
-                        // mark it Stopped if it was still Running
                         if !matches!(resource.status, ResourceStatus::Dropped) {
                             info!("Marking resource {} as Stopped", key);
                             resource.status = ResourceStatus::Dropped;
@@ -483,22 +568,21 @@ impl State {
                                     (duration_since_epoch.as_secs() as i64) - created_at.seconds;
                                 let mut nano =
                                     (duration_since_epoch.subsec_nanos() as i32) - created_at.nanos;
-
                                 if nano < 0 {
                                     seconds -= 1;
-                                    nano = 1000000000 + nano;
+                                    nano = 1_000_000_000 + nano;
                                 }
-
                                 Some(Duration::new(seconds, nano))
                             };
                         }
                     }
 
-                    //handle attributes
+                    // Build a multi-line attributes string
                     let mut attribute_str = String::from("");
                     for attr in updated_resource.attributes {
                         if let Some(field) = attr.field {
                             if let Some(name) = field.name {
+                                // Field name
                                 match name {
                                     //if the name is a String, we concatenate directly
                                     console_api::field::Name::StrName(s) => {
@@ -507,10 +591,10 @@ impl State {
 
                                     //if attribute name is an index from metadata.field_names
                                     console_api::field::Name::NameIdx(_) => {
-                                        //TODO - a se vedea cum functioneaza NameIdx
+                                        // TODO: Handle NameIdx variants
                                     }
-                                };
-
+                                }
+                                // Field value
                                 if let Some(value) = field.value {
                                     attribute_str = attribute_str + ": ";
 
@@ -540,19 +624,19 @@ impl State {
                         }
                         attribute_str = attribute_str + "\n";
                     }
-
                     if !attribute_str.is_empty() {
                         resource.attributes = Some(attribute_str);
                     }
                 }
             }
 
-            //Saving new poll_ops
+            // 3. Append new poll operations
             for raw in resources_update.new_poll_ops {
                 if let Some(mut domain_poll) = map_to_domain_poll(&raw) {
                     domain_poll.app_name = Some(app.title().to_string());
                     domain_poll.received_at = received_at.clone();
 
+                    // Enrich from resource metadata
                     if let Some(resource_id) = domain_poll.resource_id {
                         let key = format!("{}.{}", app.title(), resource_id);
                         let resources = self.database.resources_read().await;
@@ -572,6 +656,7 @@ impl State {
                         );
                     }
 
+                    // Enrich from task metadata
                     if let Some(task_id) = domain_poll.task_id {
                         let key = format!("{}.{}", app.title(), task_id);
                         let tasks = self.database.tasks_read().await;
@@ -591,6 +676,10 @@ impl State {
         }
     }
 
+    /// Returns a list of all resources currently stored in memory.
+    ///
+    /// Each entry is an `Arc<Resource>` representing the latest known
+    /// state of that resource.
     pub async fn get_resources(&self) -> Vec<Arc<Resource>> {
         self.database
             .resources_read()
@@ -600,12 +689,39 @@ impl State {
             .collect()
     }
 
+    /// Returns the sequence of recorded `Poll` events.
+    ///
+    /// Each `Poll` is wrapped in an `Arc`. The returned vector preserves
+    /// insertion order.
     pub async fn get_polls(&self) -> Vec<Arc<Poll>> {
         self.database.polls_read().await
     }
-    //endregion
 
-    //region Async op
+    // endregion
+
+    // region Async op
+
+    /// Processes a batch of asynchronous‐operation updates for the specified application.
+    ///
+    /// - `app_id`: UUID of the application emitting the async‐op events.
+    /// - `async_op_update`: An `AsyncOpUpdate` containing:
+    ///     • `new_async_ops`: newly discovered async operations to insert  
+    ///     • `stats_update`: polling statistics for existing async operations  
+    ///
+    /// This method will:
+    /// 1. Log and ignore any dropped event counts.  
+    /// 2. If the application is disabled, skip all processing.  
+    /// 3. For each new async operation:
+    ///    – Map it into a domain `TaskOp` record.  
+    ///    – Look up its resource by ID in the resource store; if found, record the resource target.  
+    ///    – Insert the new `TaskOp` into the async‐ops store under the key `{app_title}.{op_id}`.  
+    /// 4. For each stats update (keyed by async‐op ID):
+    ///    – Locate the existing `TaskOp` using `{app_title}.{op_id}`.  
+    ///    – If it exists and contains a matching in‐progress CPU poll entry,
+    ///      update its `stopped_at` timestamp when the poll ends.  
+    ///    – Otherwise, append a new `CPUOverview` entry (with `started_at` and optional `stopped_at`).  
+    ///    – If no `TaskOp` record exists, create one from scratch using any known
+    ///      task metadata (name/color) and the new CPU overview.  
     pub async fn handle_async_op_update(&self, app_id: Uuid, async_op_update: AsyncOpUpdate) {
         if async_op_update.dropped_events > 0 {
             println!(
@@ -614,12 +730,13 @@ impl State {
             );
         }
 
+        // Skip processing if the app is disabled or missing
         if let Some(app) = self.database.applications_read().await.get(&app_id) {
             if app.state() == ApplicationState::Disabled {
-                // If app is disabled we dont save anything
                 return;
             }
 
+            // Insert any new async-ops
             for raw in async_op_update.new_async_ops {
                 if let Some(mut domain_async_op) = map_to_domain_async_op(&raw) {
                     let key = format!("{}.{}", app.title(), domain_async_op.resource_id);
@@ -637,6 +754,7 @@ impl State {
                 let key = format!("{}.{}", app.title(), id);
                 let resource_target;
 
+                // Attempt to fetch the existing entry and its resource target
                 if let Some(async_op) = self.database.async_ops_read().await.get(&key) {
                     let resource_id = async_op.resource_id;
                     let key = format!("{}.{}", app.title(), resource_id);
@@ -763,6 +881,11 @@ impl State {
         }
     }
 
+    /// Retrieves all recorded asynchronous‐operation logs (CPU overviews).
+    ///
+    /// Returns a vector of `Arc<TaskOp>`, each containing the task’s
+    /// ID, optional name and color, and the sequence of `CPUOverview`
+    /// entries representing its polling history.
     pub async fn get_tasks_ops(&self) -> Vec<Arc<TaskOp>> {
         self.database
             .tasks_ops_read()
@@ -771,5 +894,6 @@ impl State {
             .cloned()
             .collect()
     }
-    //endregion
+
+    // endregion
 }

@@ -11,46 +11,59 @@ use std::{sync::Arc, time::Duration};
 use tauri::{async_runtime, Emitter, Manager};
 use tokio::{task, time::sleep};
 
+/// Boots and runs the Tauri application, setting up state, background tasks,
+/// and UI event loops.
+///
+/// This function:
+/// 1. Initializes the in‐memory and on‐disk application state via `StateManager`.
+/// 2. Spawns a background task to process state updates from `StateManager`.
+/// 3. Configures Tauri with plugins, IPC commands, and two periodic loops:
+///    - A UI update loop that pushes fresh state every second.
+///    - A “spy” event loop that forwards internal spy events to the front end.
+///
+/// Any failure to initialize persistence will cause a panic.
 pub async fn run() {
-    // Load context
+    // Load the shared application context: state manager plus channels for updates.
     let (state_manager, updates_receiver, spy_rx) = StateManager::new()
         .await
-        // TODO: should we panic here or disable the persistency?
+        // TODO: decide whether to panic or degrade gracefully if setup fails
         .unwrap_or_else(|err| panic!("Cannot start application due to {err:?}"));
 
+    // Wrap state manager in an Arc for safe sharing across tasks.
     let shared_state = Arc::new(state_manager);
 
-    // Start job
-    let state_manager = shared_state.clone();
+    // Spawn the core background worker that consumes update messages and applies them.
+    {
+        let state_manager = shared_state.clone();
+        task::spawn(async move {
+            state_manager.run(updates_receiver).await;
+        });
+    }
 
-    task::spawn(async move {
-        state_manager.run(updates_receiver).await;
-    });
-
-    // Clone for ui_updates
+    // Prepare clones for the two different asynchronous loops below.
     let ui_state_manager = shared_state.clone();
-
-    //Clone for spy_updates
     let spy_state = shared_state.clone();
+    let mut spy_rx = spy_rx;
 
+    // Build and configure the Tauri application.
     tauri::Builder::default()
+        // Install the standard dialog and shell plugins.
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_shell::init())
+        // Make our shared state available via Tauri’s state‐injection API.
         .manage(shared_state)
         .setup(move |app| {
-            // FIX: workaround for the compilation error of the tonic crate,
-            //      we need to compile using `--release` for now
+            // Workaround: Tonic crate may fail to compile in debug mode unless we
+            // explicitly release–build. We keep this comment until upstream fixes it.
             let window = app.get_webview_window("main").unwrap();
 
-            // Open dev tools if in debug build
+            // Automatically open DevTools when running in debug mode.
             #[cfg(debug_assertions)]
-            {
-                window.open_devtools();
-            }
+            window.open_devtools();
 
             let app_handle = app.handle().clone();
 
-            // update ui once per second
-            // TODO could be improved
+            // Periodically emit UI updates once per second.
             async_runtime::spawn(async move {
                 loop {
                     sleep(Duration::from_secs(1)).await;
@@ -62,20 +75,25 @@ pub async fn run() {
                 }
             });
 
+            // Forward “spy” events from the internal channel to the front‐end event bus.
             let mut spy_rx = spy_rx;
             let window_clone = window.clone();
             async_runtime::spawn(async move {
                 while let Some((id, spy_evt)) = spy_rx.recv().await {
+                    // Build JSON payload with either numeric ID or application name if known.
                     let mut payload = serde_json::json!({
-                    "id":    id.to_string(),
-                    "event": spy_evt,
+                        "id":    id.to_string(),
+                        "event": spy_evt,
                     });
+
                     if let Some(app_name) = spy_state.state.get_application_name_by_id(&id).await {
                         payload = serde_json::json!({
-                        "id":    app_name,
-                        "event": spy_evt,
+                            "id":    app_name,
+                            "event": spy_evt,
                         });
                     }
+
+                    // Send it to the front end; log to stderr on failure.
                     if let Err(e) = window_clone.emit("spy:event", payload) {
                         eprintln!("failed to emit spy:event: {e:?}");
                     }
@@ -84,6 +102,7 @@ pub async fn run() {
 
             Ok(())
         })
+        // Register our custom command handlers for IPC invocations from the UI.
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             commands::applications::applications_add,
@@ -93,6 +112,7 @@ pub async fn run() {
             commands::tasks::remove_task,
             commands::tasks::edit_task,
         ])
+        // Launch the Tauri event loop with our generated context.
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

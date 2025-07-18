@@ -10,6 +10,8 @@ use std::collections::HashMap;
 use tauri::Url;
 use uuid::Uuid;
 
+/// Whether an application is currently enabled (connected)
+/// or disabled (no active connection).
 #[derive(Default, Debug, Serialize, Deserialize, PartialEq, Copy, Clone)]
 pub(crate) enum ApplicationState {
     #[default]
@@ -17,18 +19,24 @@ pub(crate) enum ApplicationState {
     Enabled,
 }
 
+/// Status of the underlying connection channel.
 #[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub(crate) enum ConnectionStatus {
+    /// No channel created yet.
     #[default]
     Disconnected,
+    /// In the process of establishing.
     Connecting,
+    /// Successfully connected.
     Connected,
+    /// Connection errored; contains the error message.
     Error(String),
 }
 
-/// Application tracked by the application
+/// Represents a tracked application: its metadata,
+/// current process info, and connection state.
 ///
-/// Keeps app's metadatas and current state
+/// Serialized to disk for state persistence.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub(crate) struct Application {
     pid: u32,
@@ -45,6 +53,14 @@ pub(crate) struct Application {
 }
 
 impl Application {
+    /// Create a new application record by discovering the PID
+    /// and its start time from the given URL.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TraceError::PIDNotFound`] if no process
+    /// is listening on that URL, or if the start time cannot
+    /// be retrieved.
     pub fn new(title: String, url: Url) -> Result<Application, TraceError> {
         // Find the PID of the app
         let pid =
@@ -66,27 +82,33 @@ impl Application {
         })
     }
 
+    /// Current operating system PID of the running process.
     pub fn pid(&self) -> u32 {
         self.pid
     }
 
+    /// Update the stored PID (for reattach scenarios).
     pub fn set_pid(&mut self, pid: u32) {
         debug!("Setting the pid to {}", pid);
         self.pid = pid;
     }
 
+    /// Globally unique identifier for this application.
     pub fn id(&self) -> &Uuid {
         &self.id
     }
 
+    /// Title as provided by the user.
     pub fn title(&self) -> &str {
         &self.title
     }
 
+    /// The original URL endpoint used to connect.
     pub fn url(&self) -> Url {
         self.url.clone()
     }
 
+    /// Whether this application is enabled or disabled.
     pub fn state(&self) -> ApplicationState {
         self.state
     }
@@ -95,6 +117,7 @@ impl Application {
         self.cpu_usage
     }
 
+    /// Update the CPU‐usage statistic.
     pub fn set_cpu_usage(&mut self, usage: f32) {
         self.cpu_usage = usage;
     }
@@ -103,6 +126,7 @@ impl Application {
         self.memory_usage
     }
 
+    /// Update the memory‐usage statistic.
     pub fn set_memory_usage(&mut self, usage: u64) {
         self.memory_usage = usage;
     }
@@ -111,17 +135,19 @@ impl Application {
         &self.connection_status
     }
 
+    /// Update the live connection status.
     pub fn set_connection_status(&mut self, conn_status: ConnectionStatus) {
         self.connection_status = conn_status;
     }
 
-    // vreau sa vad info pentru aplicatia asta
+    /// Mark as enabled and stash the live connection object.
     pub fn enable(&mut self, connection: Connection) {
         self.state = ApplicationState::Enabled;
         self.connection = Some(connection);
         debug!("Stored connection");
     }
 
+    /// Mark as disabled and send a `Disconnect` command.
     pub async fn disable(&mut self) {
         if let Some(connection) = self.connection.take() {
             connection.commands.send(Command::Disconnect).await.ok();
@@ -133,6 +159,7 @@ impl Application {
 #[async_trait]
 impl Storable<HashMap<Uuid, Application>> for Application {
     const FILE_EXTENSION: &str = "applications.json";
+    /// Load all applications from disk under `path`.
     async fn load_all(path: String) -> Result<HashMap<Uuid, Application>, TraceError> {
         let apps =
             serde_json::from_str(&read_file(&format!("{}/{}", path, Self::FILE_EXTENSION)).await?)

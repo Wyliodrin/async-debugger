@@ -1,11 +1,21 @@
-// TODO: check if pub needed
+//! State manager for applications, tasks, resources, and their connections.
+//!
+//! This module ties together three main components:
+//! 1. `State` – in‐memory and persistent application state (via `state_manager::state`).  
+//! 2. `ConnectionManager` – background gRPC streams to instrumented applications.  
+//! 3. Tauri event emitters – send updated data to the frontend UI.  
+//!
+//! The `StateManager` orchestrates loading previous state, reconnecting known
+//! applications on startup, handling incoming gRPC events, updating the domain
+//! state, and emitting frontend events when requested.
+
 pub mod connection_manager;
 mod database;
 pub mod state;
 
 use crate::domain::application::{Application, ConnectionStatus};
 use crate::error::Error as TraceError;
-use crate::infra::spy_channel::{SpyEvent, SpySender};
+use crate::infra::spy_channel::SpyEvent;
 use crate::state_manager::connection_manager::Connection;
 use crate::state_manager::state::State;
 use anyhow::Result;
@@ -18,21 +28,36 @@ use tokio::sync::mpsc::{self, Receiver};
 use url::Url;
 use uuid::Uuid;
 
+/// Top-level orchestrator for application state and connections.
+///
+/// - Loads or initializes the persistent `State`.  
+/// - Spawns a `ConnectionManager` to handle gRPC streams to instrumented apps.  
+/// - Listens for update events and dispatches them into the `State`.  
+/// - Provides methods to add, enable/disable, delete, and list applications.  
+/// - Emits Tauri events containing the latest tasks, resources, polls, and apps.
 pub struct StateManager {
-    // Mpsc used to receive updates about connected applications
-    // (eg. number of running tasks, time ran)
-    // TODO: check if needed
-    // pub updates_sender: Sender<(Uuid, Event)>,
-
-    // Manages the connection to the running applications
-    // and sends updates about them
+    /// Handles all gRPC connections and streams of events.
     pub connection_manager: ConnectionManager,
 
+    /// In-memory and persistent domain state.
     pub state: State,
 }
 
 impl StateManager {
-    pub async fn new() -> Result<
+    /// Initialize a new `StateManager`.
+    ///
+    /// Attempts to load the previous `State` from disk. If loading fails with
+    /// a non‐recoverable error (`CannotCreateStorage`), returns an error. On
+    /// any other load failure, logs and falls back to a fresh `State::new()`.
+    ///
+    /// Also creates two channels:
+    /// - `Receiver<(Uuid, Event)>` for real application events  
+    /// - `Receiver<(Uuid, SpyEvent)>` for debug/spy events  
+    ///
+    /// # Returns
+    /// `(StateManager, real_rx, spy_rx)`
+    pub async fn new(
+    ) -> Result<
         (
             StateManager,
             Receiver<(Uuid, Event)>,
@@ -40,8 +65,8 @@ impl StateManager {
         ),
         TraceError,
     > {
-        // TODO: check if error handling could be done better here (maybe looking for a single error is not the best case)
-        let state = match State::load().await {
+        // Load or initialize the persisted state
+       let state = match State::load().await {
             // State loaded successfully
             Ok(state) => state,
             Err(error) => {
@@ -59,27 +84,33 @@ impl StateManager {
             }
         };
 
-        let (real_tx, real_rx) = mpsc::channel::<(Uuid, Event)>(100);
+        // Create channels for real & spy events
+         let (real_tx, real_rx) = mpsc::channel::<(Uuid, Event)>(100);
         let (spy_tx, spy_rx) = mpsc::channel::<(Uuid, SpyEvent)>(100);
-        let _spy_sender = SpySender::new(real_tx.clone(), spy_tx.clone());
-        let connection_manager = ConnectionManager::new(real_tx.clone(), spy_tx.clone());
+        // Initialize the connection manager
+         let connection_manager = ConnectionManager::new(real_tx.clone(), spy_tx.clone());
 
         let context = StateManager {
-            connection_manager,
-            state,
+                connection_manager,
+                state,
         };
 
         Ok((context, real_rx, spy_rx))
     }
 
-    // region events
-
+    /// Main event loop.
+    ///
+    /// - Reconnects all applications known in `State` at startup.  
+    /// - Waits for `(Uuid, Event)` messages from the `ConnectionManager`.  
+    /// - On each event, dispatches to the appropriate `State` handler:
+    ///   - `Event::Update` → task / resource / async_op updates  
+    ///   - `Event::ApplicationUpdated` → process stats  
+    ///   - `Event::Connecting` / `Connected` / `Disconnected` / `Error` → connection status  
     pub async fn run(&self, mut updates_receiver: Receiver<(Uuid, Event)>) {
         self.reconnect_all_apps().await;
         let mut skip_first_update = true;
 
-        // event loop
-        loop {
+         loop {
             tokio::select! {
                 // Received updates about apps
                 Some((app_id, event)) = updates_receiver.recv() => {
@@ -161,17 +192,21 @@ impl StateManager {
                     }
                 }
 
-                // TODO: add other events receivers
+                 // TODO: add other events receivers
                 // TODO: add receiver to add application and send to connection manager then update state
-            }
+                }
         }
     }
 
-    // endregion
+    //--------------------------------------------------------------------------
+    // Application management
+    //--------------------------------------------------------------------------
 
-    // region application
-
-    /// Registers and enables a new application
+    /// Create, persist, and connect a new application.
+    ///
+    /// - Constructs `Application::new(title, url)?`.  
+    /// - Spawns a gRPC connection via `ConnectionManager::connect_app`.  
+    /// - Marks the app as enabled and stores it in `State`.  
     ///
     /// Is also connecting to the application in order to receive updates about it
     pub async fn add_application(&self, title: String, url: Url) -> Result<Uuid, TraceError> {
@@ -192,20 +227,14 @@ impl StateManager {
         Ok(app_id)
     }
 
-    // pub async fn enable_application(&self, uuid: Uuid) -> Result<(), TraceError> {
-    // self.state.enable_app(uuid, connection).await
-    // }
-
+    /// Reconnect all previously registered applications at startup.
+    ///
+    /// For each app in `State`, calls `connect_app`. On success, marks it
+    /// enabled; on failure, logs an error.
     pub async fn reconnect_all_apps(&self) {
-        let apps_list = self.state.get_current_applications_list().await;
+         let apps_list = self.state.get_current_applications_list().await;
         for app in apps_list {
-            // TODO: check if we should retry in case of error
-            info!(
-                "Reconnecting application {} that has PID {}",
-                app.title(),
-                app.pid()
-            );
-            let connection_result = self
+                        info!("Reconnecting {} (PID {})", app.title(), app.pid()); let connection_result = self
                 .connection_manager
                 .connect_app(*app.id(), app.url().clone(), app.pid())
                 .await
@@ -224,59 +253,67 @@ impl StateManager {
         }
     }
 
-    pub async fn disable_application(&self, uuid: Uuid) -> Result<(), TraceError> {
+    /// Disable an application’s updates without deleting its record.
+    pub async fn disable_application(
+        &self,
+        uuid: Uuid,
+    ) -> Result<(), TraceError> {
         self.state.disable_app(uuid).await
     }
 
-    pub async fn delete_application(&self, uuid: Uuid) -> Result<Uuid, TraceError> {
+    /// Delete an application from state.
+    ///
+    /// Disconnects it (if enabled), removes its folder on disk, and
+    /// deletes it from the in-memory `State`.
+    pub async fn delete_application(
+        &self,
+        uuid: Uuid,
+    ) -> Result<Uuid, TraceError> {
         self.state.delete_application(uuid).await;
         Ok(uuid)
     }
 
-    pub async fn _enable_application(&self, uuid: Uuid, connection: Connection) {
+        pub async fn _enable_application(&self, uuid: Uuid, connection: Connection) {
         self.state.enable_app(uuid, connection).await
     }
-
-    /// Returns a list of the applications currently registered in the app
-    /// (not necessarily active too)
-    pub async fn current_applications(&self) -> Vec<Arc<Application>> {
+    /// List all applications (enabled or not).
+    pub async fn current_applications(
+        &self,
+    ) -> Vec<Arc<Application>> {
         self.state.get_current_applications_list().await
     }
 
-    // pub async fn delete_connection(&self, uuid: Uuid) {
-    //     self.connection_manager.disconnect_app(uuid).await;
-    //     self.state.delete_app(uuid).await
-    // }
+    //--------------------------------------------------------------------------
+    // Frontend event emitters
+    //--------------------------------------------------------------------------
 
-    // endregion
-
-    // region UPDATES
-
+    /// Emit the current tasks list to the Tauri front end.
     pub async fn emit_update_tasks(&self, app_handle: &AppHandle) {
         let tasks = self.state.get_tasks().await;
         app_handle.emit("update:tasks", tasks).ok();
     }
 
+    /// Emit the current applications list to the Tauri front end.
     pub async fn emit_update_applications(&self, app_handle: &AppHandle) {
         let elements = self.state.get_current_applications_list().await;
         app_handle.emit("update:applications", elements).ok();
     }
 
+    /// Emit the current resources list to the Tauri front end.
     pub async fn emit_update_resources(&self, app_handle: &AppHandle) {
         let resources = self.state.get_resources().await;
         app_handle.emit("update:resources", resources).ok();
     }
 
+    /// Emit the current polls list to the Tauri front end.
     pub async fn emit_update_polls(&self, app_handle: &AppHandle) {
         let polls = self.state.get_polls().await;
         app_handle.emit("update:polls", polls).ok();
     }
 
+    /// Emit the current task‐ops list to the Tauri front end.
     pub async fn emit_update_tasks_op(&self, app_handle: &AppHandle) {
         let tasks_op = self.state.get_tasks_ops().await;
         app_handle.emit("update:tasks_ops", tasks_op).ok();
     }
-
-    // pub async fn emit_connection_update(&self, app_id: )
-    // endregion
 }
