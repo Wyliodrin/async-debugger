@@ -200,6 +200,9 @@ impl ConnectionManager {
                                                 updates_sender.send((cloned_id, Event::Error(TraceError::CannotReadProcessInfo { pid }))).await.ok();
                                             }
                                         }
+                                        else{
+                                            updates_sender.send((cloned_id, Event::Error(TraceError::CannotReadProcessInfo { pid }))).await.ok();
+                                        }
                                     }
                                 }
                             }

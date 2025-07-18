@@ -63,7 +63,6 @@ export const useDataStore = defineStore('data', () => {
                 duration: r.duration.formatted
                 }
             })
-            console.log("Resources primite:" + JSON.stringify(e.payload[0]));
         }
     }
 
@@ -76,7 +75,6 @@ export const useDataStore = defineStore('data', () => {
                     ...p
                 }
             })
-            console.log("Polls primite: " + JSON.stringify(e.payload[0]));
         }
     }
 

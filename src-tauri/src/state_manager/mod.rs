@@ -151,6 +151,7 @@ impl StateManager {
 
                         Event::Disconnected => {
                             println!("Disconnected app");
+                            self.delete_connection(app_id).await;
                             self.state.handle_app_conn_update(app_id, ConnectionStatus::Disconnected).await;
                         },
 
@@ -243,10 +244,10 @@ impl StateManager {
         self.state.get_current_applications_list().await
     }
 
-    // pub async fn delete_connection(&self, uuid: Uuid) {
-    //     self.connection_manager.disconnect_app(uuid).await;
-    //     self.state.delete_app(uuid).await
-    // }
+    pub async fn delete_connection(&self, uuid: Uuid) {
+        self.connection_manager.disconnect_app(uuid).await;
+        //     self.state.delete_app(uuid).await
+    }
 
     // endregion
 
