@@ -1,8 +1,14 @@
+//! Convert from `console_api::resources::Resource` to our domain `Resource`.
+
 use crate::domain::resource::{Resource, ResourceStatus};
+use crate::domain::duration::Duration;
 use console_api::resources;
 use console_api::resources::resource::kind;
 
+/// Map an upstream `console_api` resource into our domain `Resource`.
+/// Returns `None` if the resource ID is missing.
 pub fn map_to_domain_resource(resource: &resources::Resource) -> Option<Resource> {
+    // Format the source‐location if available.
     let mut location = resource.location.as_ref().map(|loc| {
         let full_path = loc.file();
         let path = std::path::Path::new(full_path);
@@ -53,7 +59,7 @@ pub fn map_to_domain_resource(resource: &resources::Resource) -> Option<Resource
         id,
         status: ResourceStatus::Ready,
         target,
-        duration: None,
+        duration: Some(Duration::new(0, 0)),
         location,
         attributes: None,
     })

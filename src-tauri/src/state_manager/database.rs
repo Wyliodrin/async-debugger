@@ -1,3 +1,16 @@
+//! Persistent, in-memory database backed by disk storage.
+//!
+//! The `Database` struct holds all domain objects in RAM (wrapped in `Arc<…>`),
+//! and syncs them to disk via the `Storage` trait’s read/write guards.
+//!
+//! # Storage Layout
+//!
+//! - applications → `<storage_folder>/applications.json`  
+//! - tasks        → `<storage_folder>/tasks.json`  
+//! - resources    → `<storage_folder>/resources.json`  
+//! - polls        → `<storage_folder>/polls.json`  
+//! - async_ops    → `<storage_folder>/async_ops.json`  
+//! - tasks_ops    → `<storage_folder>/tasks_ops.json`  
 use crate::{
     domain::{
         application::Application,
@@ -16,35 +29,42 @@ use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-/// Representation of all data stored on the disk for persistency
-/// Provides read/write mechanisms that assure syncronisation with
-/// disk files
+/// In-memory, thread-safe cache of all domain data, persisted on disk.
+///
+/// Wraps each entity in `Arc<…>` so that clones are cheap, and guards writes
+/// behind `tokio::sync::RwLock`. Implements `Storage` to provide atomic read
+/// and write handles that flush changes to disk on drop.
 #[derive(Default)]
 pub(crate) struct Database {
+    /// Root folder path for JSON files.
     storage_folder: String,
-    //applications list
-    applications: tokio::sync::RwLock<HashMap<Uuid, Arc<Application>>>,
-    //tasks list
-    tasks: tokio::sync::RwLock<HashMap<String, Arc<Task>>>,
-    //resources list
-    resources: tokio::sync::RwLock<HashMap<String, Arc<Resource>>>,
-    //polls list
-    polls: tokio::sync::RwLock<Vec<Arc<Poll>>>,
-    //async ops list
-    async_ops: tokio::sync::RwLock<HashMap<String, Arc<AsyncOp>>>,
-    //tasks ops
-    tasks_ops: tokio::sync::RwLock<HashMap<String, Arc<TaskOp>>>,
+
+    /// All persisted applications, keyed by UUID.
+    applications: RwLock<HashMap<Uuid, Arc<Application>>>,
+
+    /// All persisted tasks, keyed by their string ID.
+    tasks: RwLock<HashMap<String, Arc<Task>>>,
+
+    /// All persisted resources, keyed by their string ID.
+    resources: RwLock<HashMap<String, Arc<Resource>>>,
+
+    /// All persisted polls.
+    polls: RwLock<Vec<Arc<Poll>>>,
+
+    /// All persisted asynchronous operations, keyed by string ID.
+    async_ops: RwLock<HashMap<String, Arc<AsyncOp>>>,
+
+    /// All persisted task operations, keyed by string ID.
+    tasks_ops: RwLock<HashMap<String, Arc<TaskOp>>>,
 }
 
 impl Database {
-    /// Is creating a new, fresh database instance withouth
-    /// loading from disk
+    /// Create a fresh, empty database without attempting to load from disk.
     ///
-    /// Is replacing a default implementation, which could not
-    /// be added because the Database is used as a dyn Storage
-    /// (Self: Sized rule)
+    /// Use this if you want to start with no pre-existing data.
     ///
-    /// This method should be used if loading failed
+    /// # Parameters
+    /// - `storage_folder`: path to the folder where JSON files will be read/written.
     pub(crate) fn new(storage_folder: String) -> Self {
         Self {
             storage_folder,
@@ -57,14 +77,14 @@ impl Database {
         }
     }
 
-    /// Is loading the database from the disk
+    /// Load all persisted data from disk into memory.
     ///
-    /// If file location of any data is not found, a fresh instance will be used.
+    /// For each entity type, attempts to read `<storage_folder>/<title>.json`.
+    /// - If the file is missing, logs a debug‐level message and continues with an empty collection.
+/// - On any other error (I/O, serialization, etc.), returns `Err(TraceError)`.
     ///
-    /// # Error
-    ///
-    /// If failed to load the failed due to unrecoverable errors (eg: failed to serialize)
-    /// an error will be returned
+    /// # Errors
+    /// Returns a `TraceError` if any non-`PathNotFound` error occurs during loading.
     pub(crate) async fn load(storage_folder: String) -> Result<Self, TraceError> {
         // Load all applications
         let applications: HashMap<Uuid, Arc<Application>> =
@@ -76,14 +96,14 @@ impl Database {
                 Err(error) => match error {
                     TraceError::PathNotFound(_) => {
                         debug!("Applications file not found, using empty list");
-                        HashMap::new()
-                    }
+                HashMap::new()
+            }
                     _ => {
                         error!("Failed to load applications due to {error:?}");
                         return Err(error);
-                    }
+            }
                 },
-            };
+        };
         debug!(
             "Successfully loaded {} applications from disk.",
             applications.values().len()
@@ -98,12 +118,12 @@ impl Database {
             Err(error) => match error {
                 TraceError::PathNotFound(_) => {
                     debug!("Tasks file not found, using empty list");
-                    HashMap::new()
-                }
+                HashMap::new()
+            }
                 _ => {
                     error!("Failed to load tasks due to {error:?}");
                     return Err(error);
-                }
+            }
             },
         };
         debug!(
@@ -121,14 +141,14 @@ impl Database {
                 Err(error) => match error {
                     TraceError::PathNotFound(_) => {
                         debug!("Tasks file not found, using empty list");
-                        HashMap::new()
-                    }
+                HashMap::new()
+            }
                     _ => {
                         error!("Failed to load resources due to {error:?}");
                         return Err(error);
-                    }
+            }
                 },
-            };
+        };
         debug!(
             "Successfully loaded {} resources from disk.",
             resources.values().len()
@@ -140,12 +160,12 @@ impl Database {
             Err(error) => match error {
                 TraceError::PathNotFound(_) => {
                     debug!("Polls file not found, using empty list");
-                    Vec::new()
-                }
+                Vec::new()
+            }
                 _ => {
                     error!("Failed to load polls due to {error:?}");
                     return Err(error);
-                }
+            }
             },
         };
         debug!(
@@ -162,15 +182,16 @@ impl Database {
                 Err(error) => match error {
                     TraceError::PathNotFound(_) => {
                         debug!("Async_op file not found, using empty list");
-                        HashMap::new()
-                    }
+                HashMap::new()
+            }
                     _ => {
                         error!("Failed to load polls due to {error:?}");
                         return Err(error);
-                    }
+            }
                 },
-            };
+        };
 
+        // Load tasks_ops
         let tasks_ops = match TaskOp::load_all(storage_folder.clone()).await {
             Ok(tasks_ops) => tasks_ops
                 .into_iter()
@@ -179,14 +200,15 @@ impl Database {
             Err(error) => match error {
                 TraceError::PathNotFound(_) => {
                     debug!("Tasks_ops file not found, using empty list");
-                    HashMap::new()
-                }
+                HashMap::new()
+            }
                 _ => {
                     error!("Failed to load polls due to {error:?}");
                     return Err(error);
-                }
+            }
             },
         };
+        debug!("Loaded {} tasks_ops", tasks_ops.len());
 
         Ok(Self {
             storage_folder,
@@ -202,10 +224,12 @@ impl Database {
 
 #[async_trait]
 impl Storage for Database {
+    /// Read-only snapshot of all applications.
     async fn applications_read(&self) -> HashMap<Uuid, Arc<Application>> {
         self.applications.read().await.clone()
     }
 
+    /// Obtain a write guard for applications. On drop, writes back to disk.
     async fn applications_write(
         &self,
     ) -> WriteableDataBaseGuard<'_, HashMap<Uuid, Arc<Application>>> {
@@ -218,10 +242,12 @@ impl Storage for Database {
         }
     }
 
+    /// Read-only snapshot of all tasks.
     async fn tasks_read(&self) -> HashMap<String, Arc<Task>> {
         self.tasks.read().await.clone()
     }
 
+    /// Obtain a write guard for tasks. On drop, writes back to disk.
     async fn tasks_write(&self) -> WriteableDataBaseGuard<'_, HashMap<String, Arc<Task>>> {
         let elements = self.tasks.write().await;
 
@@ -232,6 +258,7 @@ impl Storage for Database {
         }
     }
 
+    /// Read-only snapshot of all resources.
     async fn resources_read(&self) -> HashMap<String, Arc<Resource>> {
         self.resources.read().await.clone()
     }
@@ -246,10 +273,12 @@ impl Storage for Database {
         }
     }
 
+    /// Read-only snapshot of all polls.
     async fn polls_read(&self) -> Vec<Arc<Poll>> {
         self.polls.read().await.clone()
     }
 
+    /// Obtain a write guard for polls. On drop, writes back to disk.
     async fn polls_write(&self) -> WriteableDataBaseGuard<'_, Vec<Arc<Poll>>> {
         let elements = self.polls.write().await;
 
@@ -260,6 +289,7 @@ impl Storage for Database {
         }
     }
 
+    /// Read-only snapshot of all asynchronous operations.
     async fn async_ops_read(&self) -> HashMap<String, Arc<AsyncOp>> {
         self.async_ops.read().await.clone()
     }
@@ -274,6 +304,7 @@ impl Storage for Database {
         }
     }
 
+    /// Read-only snapshot of all task operations.
     async fn tasks_ops_read(&self) -> HashMap<String, Arc<TaskOp>> {
         self.tasks_ops.read().await.clone()
     }

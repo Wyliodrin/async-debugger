@@ -1,9 +1,13 @@
+//! Convert from `console_api::tasks::Task` to our domain `Task`.
+
 use super::{read_field_value_string, read_field_value_u64};
 use crate::domain::{Task, TaskState};
 use console_api::tasks;
 use console_api::tasks::task::Kind;
 use uuid::Uuid;
 
+/// Map an upstream console API task into our domain type.
+/// Returns `None` if the task ID is missing.
 pub fn map_to_domain_task(_app_id: Uuid, task: &tasks::Task) -> Option<Task> {
     let id = task.id.as_ref().map(|v| v.id)?;
     let tid = read_field_value_u64(task, "task.id");

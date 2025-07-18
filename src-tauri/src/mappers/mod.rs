@@ -1,3 +1,6 @@
+//! Central re‐exports and utility functions for mapping console_api data
+//! into our domain models.
+
 pub(crate) mod async_ops;
 pub(crate) mod poll;
 pub(crate) mod resources;
@@ -12,8 +15,7 @@ use console_api::{
 use log::error;
 use tokio::fs::read_to_string;
 
-// UTILS METHODS (could be moved in a dedicated module)
-
+/// Find a given named field in a console API task.
 fn find_field(task: &ConsoleTask, field_name: impl AsRef<str>) -> Option<&Field> {
     task.fields.iter().find(|field| {
         if let Some(Name::StrName(ref s)) = field.name {
@@ -24,6 +26,7 @@ fn find_field(task: &ConsoleTask, field_name: impl AsRef<str>) -> Option<&Field>
     })
 }
 
+/// Read a `u64` value from a named field in a task.
 fn read_field_value_u64(task: &ConsoleTask, field_name: impl AsRef<str>) -> Option<u64> {
     if let Some(field) = find_field(task, field_name) {
         match field.value {
@@ -35,6 +38,7 @@ fn read_field_value_u64(task: &ConsoleTask, field_name: impl AsRef<str>) -> Opti
     }
 }
 
+/// Read a string value from a named field in a task.
 fn read_field_value_string(task: &ConsoleTask, field_name: impl AsRef<str>) -> Option<&str> {
     if let Some(field) = find_field(task, field_name) {
         match field.value {
@@ -46,6 +50,11 @@ fn read_field_value_string(task: &ConsoleTask, field_name: impl AsRef<str>) -> O
     }
 }
 
+/// Asynchronously reads an entire file into a `String`.
+///
+/// # Errors
+///
+/// Returns `TraceError::PathNotFound(filename)` if the file can’t be opened.
 pub async fn read_file(filename: &str) -> Result<String, TraceError> {
     read_to_string(filename).await.map_err(|err| {
         error!("Failed to load {filename} ({err:?})");
