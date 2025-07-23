@@ -15,7 +15,6 @@ pub mod state;
 
 use crate::domain::application::{Application, ConnectionStatus};
 use crate::error::Error as TraceError;
-use crate::infra::spy_channel::SpyEvent;
 use crate::state_manager::connection_manager::Connection;
 use crate::state_manager::state::State;
 use anyhow::Result;
@@ -50,17 +49,15 @@ impl StateManager {
     /// a non‐recoverable error (`CannotCreateStorage`), returns an error. On
     /// any other load failure, logs and falls back to a fresh `State::new()`.
     ///
-    /// Also creates two channels:
-    /// - `Receiver<(Uuid, Event)>` for real application events  
-    /// - `Receiver<(Uuid, SpyEvent)>` for debug/spy events  
+    /// Also creates a channel:
+    /// - `Receiver<(Uuid, Event)>` for application events  
     ///
     /// # Returns
-    /// `(StateManager, real_rx, spy_rx)`
+    /// `(StateManager, rx)
     pub async fn new() -> Result<
         (
             StateManager,
             Receiver<(Uuid, Event)>,
-            Receiver<(Uuid, SpyEvent)>,
         ),
         TraceError,
     > {
@@ -83,18 +80,17 @@ impl StateManager {
             }
         };
 
-        // Create channels for real & spy events
-        let (real_tx, real_rx) = mpsc::channel::<(Uuid, Event)>(100);
-        let (spy_tx, spy_rx) = mpsc::channel::<(Uuid, SpyEvent)>(100);
+        // Create channel for events
+        let (tx, rx) = mpsc::channel::<(Uuid, Event)>(100);
         // Initialize the connection manager
-        let connection_manager = ConnectionManager::new(real_tx.clone(), spy_tx.clone());
+        let connection_manager = ConnectionManager::new(tx.clone());
 
         let context = StateManager {
             connection_manager,
             state,
         };
 
-        Ok((context, real_rx, spy_rx))
+        Ok((context, rx))
     }
 
     /// Main event loop.

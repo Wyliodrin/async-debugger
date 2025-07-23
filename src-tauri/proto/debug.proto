@@ -1,0 +1,20 @@
+syntax = "proto3";
+import "google/protobuf/empty.proto";
+package async_debugger;
+
+message DebugEvent {
+  string name = 1;
+  string kind = 2;
+  int64 ts = 3;
+  string payload = 4;
+}
+
+message DebugStreamRequest {
+  repeated DebugEvent events = 1;
+}
+
+message Empty {}
+
+service DebugChannel {
+  rpc SendEvent(DebugEvent) returns (google.protobuf.Empty);
+}

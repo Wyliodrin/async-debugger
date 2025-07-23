@@ -1,4 +1,4 @@
-mod commands;
+pub mod commands;
 mod common;
 mod domain;
 mod error;
@@ -8,8 +8,10 @@ mod state_manager;
 
 use state_manager::StateManager;
 use std::{sync::Arc, time::Duration};
-use tauri::{async_runtime, Emitter, Manager};
+use tauri::{async_runtime, Manager};
 use tokio::{task, time::sleep};
+
+use crate::commands::channels::DebugSenderState;
 
 /// Boots and runs the Tauri application, setting up state, background tasks,
 /// and UI event loops.
@@ -19,12 +21,11 @@ use tokio::{task, time::sleep};
 /// 2. Spawns a background task to process state updates from `StateManager`.
 /// 3. Configures Tauri with plugins, IPC commands, and two periodic loops:
 ///    - A UI update loop that pushes fresh state every second.
-///    - A “spy” event loop that forwards internal spy events to the front end.
 ///
 /// Any failure to initialize persistence will cause a panic.
 pub async fn run() {
     // Load the shared application context: state manager plus channels for updates.
-    let (state_manager, updates_receiver, spy_rx) = StateManager::new()
+    let (state_manager, updates_receiver) = StateManager::new()
         .await
         // TODO: decide whether to panic or degrade gracefully if setup fails
         .unwrap_or_else(|err| panic!("Cannot start application due to {err:?}"));
@@ -42,16 +43,14 @@ pub async fn run() {
 
     // Prepare clones for the two different asynchronous loops below.
     let ui_state_manager = shared_state.clone();
-    let spy_state = shared_state.clone();
-    let mut spy_rx = spy_rx;
 
     // Build and configure the Tauri application.
     tauri::Builder::default()
         // Install the standard dialog and shell plugins.
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_shell::init())
         // Make our shared state available via Tauri’s state‐injection API.
         .manage(shared_state)
+        .manage(DebugSenderState::default())
         .setup(move |app| {
             // Workaround: Tonic crate may fail to compile in debug mode unless we
             // explicitly release–build. We keep this comment until upstream fixes it.
@@ -62,7 +61,7 @@ pub async fn run() {
             window.open_devtools();
 
             let app_handle = app.handle().clone();
-
+            crate::commands::debug_server::start_debug_server(&app_handle);
             // Periodically emit UI updates once per second.
             async_runtime::spawn(async move {
                 loop {
@@ -72,31 +71,6 @@ pub async fn run() {
                     ui_state_manager.emit_update_resources(&app_handle).await;
                     ui_state_manager.emit_update_polls(&app_handle).await;
                     ui_state_manager.emit_update_tasks_op(&app_handle).await;
-                }
-            });
-
-            // Forward “spy” events from the internal channel to the front‐end event bus.
-            let mut spy_rx = spy_rx;
-            let window_clone = window.clone();
-            async_runtime::spawn(async move {
-                while let Some((id, spy_evt)) = spy_rx.recv().await {
-                    // Build JSON payload with either numeric ID or application name if known.
-                    let mut payload = serde_json::json!({
-                        "id":    id.to_string(),
-                        "event": spy_evt,
-                    });
-
-                    if let Some(app_name) = spy_state.state.get_application_name_by_id(&id).await {
-                        payload = serde_json::json!({
-                            "id":    app_name,
-                            "event": spy_evt,
-                        });
-                    }
-
-                    // Send it to the front end; log to stderr on failure.
-                    if let Err(e) = window_clone.emit("spy:event", payload) {
-                        eprintln!("failed to emit spy:event: {e:?}");
-                    }
                 }
             });
 
@@ -111,6 +85,7 @@ pub async fn run() {
             commands::applications::enable_app,
             commands::tasks::remove_task,
             commands::tasks::edit_task,
+            commands::channels::send_debug_event,
         ])
         // Launch the Tauri event loop with our generated context.
         .run(tauri::generate_context!())

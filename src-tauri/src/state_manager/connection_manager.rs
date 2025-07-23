@@ -11,7 +11,6 @@ use crate::common::get_pid_hosting_at;
 use crate::{
     domain::application::{self, Application},
     error::Error as TraceError,
-    infra::spy_channel::{SpyEvent, SpySender},
 };
 use console_api::instrument::{instrument_client::InstrumentClient, InstrumentRequest, Update};
 use log::{debug, error, info, warn};
@@ -82,8 +81,8 @@ impl Drop for Connection {
 /// Tokio task for each connection to handle streaming updates and periodic
 /// process stats.
 pub struct ConnectionManager {
-    /// Internal spy sender that multiplexes real and spy events.
-    sender: SpySender,
+    /// Internal sender
+    sender: Sender<(Uuid, Event)>,
     /// Map of active connection tasks, keyed by application UUID.
     active_connections: Arc<RwLock<HashMap<Uuid, tokio::task::JoinHandle<()>>>>,
 }
@@ -105,16 +104,11 @@ impl ConnectionManager {
     /// Create a new `ConnectionManager`.
     ///
     /// # Parameters
-    /// - `real_tx`: the channel to send real `(Uuid, Event)` tuples on.
-    /// - `spy_tx`: the channel to send internal spy observations on.
+    /// - `tx`: the channel to send `(Uuid, Event)` tuples on.
     ///
     /// # Returns
     /// A fresh manager without any active connections.
-    pub fn new(
-        real_tx: Sender<(Uuid, Event)>,
-        spy_tx: Sender<(Uuid, SpyEvent)>,
-    ) -> Self {
-        let sender = SpySender::new(real_tx, spy_tx);
+    pub fn new(sender: Sender<(Uuid, Event)>) -> Self {
         Self {
             sender,
             active_connections: Arc::new(RwLock::new(HashMap::new())),
@@ -314,11 +308,11 @@ impl ConnectionManager {
         debug!("Created the endpoint");
         let channel =
             endpoint
-            .connect()
-            .await
+                .connect()
+                .await
                 .map_err(|e| TraceError::CannotCreateChannelForApp {
-                url: url.to_string(),
-            })?;
+                    url: url.to_string(),
+                })?;
         debug!("Created channel");
 
         let mut client = InstrumentClient::new(channel);
