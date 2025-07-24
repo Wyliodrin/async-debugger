@@ -39,9 +39,21 @@ export const useApplicationStore = defineStore('applications', () => {
 
     async function editApplication(app: Application) {
         const indexOfApp = applications.value.findIndex(item => item.id === app.id);
+        if (indexOfApp == -1) return;
 
-        if (indexOfApp !== -1) {
-            applications.value[indexOfApp] = app;
+        let appToEdit = applications.value[indexOfApp];
+        if (appToEdit) {
+            appToEdit.connection_status = "Connecting";
+            await invoke('edit_application', {uuid: app.id, appTitle: app.title, appUrl: app.url, oldTitle: appToEdit.title}).then(
+                (uuid) => {
+                    appToEdit.title = app.title;
+                    appToEdit.url = app.url;
+                    appToEdit.id = uuid as string;
+                }
+            ).catch(
+                (e) => console.log("Failed to edit application due to " + e)
+            );
+            //appToEdit.connection_status = "Connected";
         }
     }
 

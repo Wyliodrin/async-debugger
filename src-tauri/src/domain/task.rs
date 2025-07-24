@@ -2,7 +2,7 @@
 //! implements `Storable` to read tasks from JSON.
 
 use super::storable::Storable;
-use crate::domain::duration::Duration;
+use crate::domain::{duration::Duration, has_app_name::HasAppName};
 use crate::error::Error as TraceError;
 use crate::mappers::read_file;
 use async_trait::async_trait;
@@ -81,5 +81,11 @@ impl Storable<HashMap<String, Task>> for Task {
         let s = read_file(&format!("{}/{}", path, Self::FILE_EXTENSION)).await?;
         let tasks = serde_json::from_str::<HashMap<String, Task>>(&s).map_err(TraceError::Serde)?;
         Ok(tasks)
+    }
+}
+
+impl HasAppName for Task {
+    fn set_app_name(&mut self, new_app_name: String) {
+        self.app_name = Some(new_app_name.clone());
     }
 }

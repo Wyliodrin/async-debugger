@@ -54,13 +54,7 @@ impl StateManager {
     ///
     /// # Returns
     /// `(StateManager, rx)
-    pub async fn new() -> Result<
-        (
-            StateManager,
-            Receiver<(Uuid, Event)>,
-        ),
-        TraceError,
-    > {
+    pub async fn new() -> Result<(StateManager, Receiver<(Uuid, Event)>), TraceError> {
         // Load or initialize the persisted state
         let state = match State::load().await {
             // State loaded successfully
@@ -255,6 +249,38 @@ impl StateManager {
         self.state.disable_app(uuid).await
     }
 
+    /// Edits an existing application identified by its UUID.
+    ///
+    /// This asynchronous function performs the following steps:
+    /// 1. Deletes the application with the specified UUID.
+    /// 2. Renames the application key from `old_title` to `app_title` in the internal state.
+    /// 3. Parses the new application URL and adds the updated application with the new title and URL.
+    ///
+    /// # Parameters
+    ///
+    /// * `uuid` - The unique identifier of the application to be edited.
+    /// * `app_title` - The new title for the application.
+    /// * `app_url` - The new URL associated with the application.
+    /// * `old_title` - The old title of the application to be replaced.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` which is:
+    /// - `Ok(Uuid)` with the UUID of the updated application if successful.
+    /// - `Err(TraceError)` if any step fails, including deletion, renaming, URL parsing, or addition.
+    pub async fn edit_application(
+        &self,
+        uuid: Uuid,
+        app_title: String,
+        app_url: String,
+        old_title: String,
+    ) -> Result<Uuid, TraceError> {
+        self.delete_application(uuid).await?;
+        self.state.edit_app(app_title.clone(), old_title).await?;
+        let url = Url::parse(&app_url)?;
+        self.add_application(app_title.clone(), url).await
+    }
+
     /// Delete an application from state.
     ///
     /// Disconnects it (if enabled), removes its folder on disk, and
@@ -268,7 +294,7 @@ impl StateManager {
         self.state.enable_app(uuid, connection).await
     }
     /// List all applications (enabled or not).
-    pub async fn current_applications(&self) -> Vec<Arc<Application>> {
+    pub(crate) async fn current_applications(&self) -> Vec<Arc<Application>> {
         self.state.get_current_applications_list().await
     }
 

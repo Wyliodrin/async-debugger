@@ -22,7 +22,7 @@ use uuid::Uuid;
 /// # Returns
 ///
 /// On success, returns the newly created application's [`Uuid`].
-/// If the URL was already registered, returns an [`Error::ApplicationAlreadyConnected`].
+/// If the URL or title was already registered, returns an [`Error::ApplicationAlreadyConnected`].
 /// If URL parsing fails, returns the appropriate [`Error`].
 #[tauri::command]
 pub async fn applications_add(
@@ -36,6 +36,9 @@ pub async fn applications_add(
     for app in applications {
         if app.url().to_string() == url {
             return Err(Error::ApplicationAlreadyConnected(url.into()));
+        }
+        if app.title() == title {
+            return Err(Error::ApplicationAlreadyConnected(title));
         }
     }
     let url = url.try_into()?;
@@ -115,4 +118,30 @@ pub async fn disable_app(
     uuid: Uuid,
 ) -> Result<(), Error> {
     state_manager.disable_application(uuid).await
+}
+
+/// Edit an application
+///
+/// # Arguments
+///
+/// * `state_manager` – shared application state manager
+/// * `uuid` - identifier of the application to edit
+/// * `app_title` - the new title of the application
+/// * `app_url` - the new url of the application
+/// * `old_title` - the current title of the application that needs to be edited
+///
+/// # Returns
+///
+/// On succes, returns the new Uuid of the application
+#[tauri::command]
+pub async fn edit_application(
+    state_manager: State<'_, Arc<StateManager>>,
+    uuid: Uuid,
+    app_title: String,
+    app_url: String,
+    old_title: String,
+) -> Result<Uuid, Error> {
+    state_manager
+        .edit_application(uuid, app_title, app_url, old_title)
+        .await
 }

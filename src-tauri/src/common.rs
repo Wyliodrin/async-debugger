@@ -1,7 +1,13 @@
 use chrono::DateTime;
-use std::process::Command;
+use serde::Serialize;
+use std::fmt::Debug;
+use std::sync::Arc;
+use std::{collections::HashMap, process::Command};
 use sysinfo::{Pid, System};
 use url::Url;
+
+use crate::domain::has_app_name::HasAppName;
+use crate::infra::guard::WriteableDataBaseGuard;
 
 /// Returns the PID of the process listening on the given URL’s port, if any.
 ///
@@ -90,4 +96,78 @@ pub fn get_process_start_time(pid: u32) -> Option<String> {
 
     // PID not found in the system
     None
+}
+
+/// Renames keys in the given database guard by replacing the `old_title` prefix
+/// in keys with the `new_title` prefix. The function iterates over all keys,
+/// collects the keys that start with `old_title.`, and renames them accordingly.
+///
+/// # Arguments
+///
+/// * `guard` - A mutable reference to a writable database guard holding a `HashMap`
+///             where keys are strings and values are of generic type `T`.
+/// * `new_title` - The new title string to replace the old title prefix in keys.
+/// * `old_title` - The old title string prefix to be replaced in keys.
+///
+/// # Type Parameters
+///
+/// * `T` - The type of the values in the hashmap. Must implement `Serialize` and `Debug`.
+pub fn rename_database_keys<T: Serialize + Debug>(
+    guard: &mut WriteableDataBaseGuard<'_, HashMap<String, T>>,
+    new_title: String,
+    old_title: String,
+) {
+    let mut changes = Vec::new();
+    for key in guard.keys() {
+        if let Some(rest) = key.strip_prefix(&format!("{}.", old_title)) {
+            let new_key = format!("{}.{}", new_title, rest);
+            changes.push((key.clone(), new_key));
+        }
+    }
+
+    for (old, new) in changes {
+        if let Some(val) = guard.remove(&old) {
+            guard.insert(new, val);
+        }
+    }
+}
+
+/// Renames keys in the given database guard by replacing the `old_title` prefix
+/// in keys with the `new_title` prefix. In addition, it updates the `app_name`
+/// attribute of the value associated with each renamed key.
+///
+/// This function works on database guards containing `HashMap<String, Arc<T>>`,
+/// where `T` must implement `Serialize`, `Debug`, `HasAppName`, and `Clone`.
+///
+/// # Arguments
+///
+/// * `guard` - A mutable reference to a writable database guard holding a `HashMap`
+///             where keys are strings and values are `Arc` wrapped generic type `T`.
+/// * `new_title` - The new title string to replace the old title prefix in keys.
+/// * `old_title` - The old title string prefix to be replaced in keys.
+///
+/// # Type Parameters
+///
+/// * `T` - The type of the values inside the Arc in the hashmap. Must implement
+///         `Serialize`, `Debug`, `HasAppName` (a trait providing `set_app_name`), and `Clone`.
+pub fn rename_database_keys_and_app_name<T: Serialize + Debug + HasAppName + Clone>(
+    guard: &mut WriteableDataBaseGuard<'_, HashMap<String, Arc<T>>>,
+    new_title: String,
+    old_title: String,
+) {
+    let mut changes = Vec::new();
+    for key in guard.keys() {
+        if let Some(rest) = key.strip_prefix(&format!("{}.", old_title)) {
+            let new_key = format!("{}.{}", new_title, rest);
+            changes.push((key.clone(), new_key));
+        }
+    }
+
+    for (old, new) in changes {
+        if let Some(mut val_arc) = guard.remove(&old) {
+            let val = Arc::make_mut(&mut val_arc);
+            val.set_app_name(new_title.clone());
+            guard.insert(new, Arc::new(val.clone()));
+        }
+    }
 }

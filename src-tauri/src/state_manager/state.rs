@@ -1,6 +1,6 @@
 use super::connection_manager::{AppUpdate, Connection};
 use super::database::Database;
-use crate::common::get_pid_hosting_at;
+use crate::common::{get_pid_hosting_at, rename_database_keys, rename_database_keys_and_app_name};
 use crate::domain::application::{ApplicationState, ConnectionStatus};
 use crate::domain::async_op::{CPUOverview, TaskOp, TimeStamp};
 use crate::domain::resource::ResourceStatus;
@@ -114,7 +114,7 @@ impl State {
     ///
     /// The returned vector contains an `Arc<Application>` for each
     /// application in the database.
-    pub async fn get_current_applications_list(&self) -> Vec<Arc<Application>> {
+    pub(crate) async fn get_current_applications_list(&self) -> Vec<Arc<Application>> {
         self.database
             .applications_read()
             .await
@@ -127,7 +127,7 @@ impl State {
     ///
     /// If an application with the same ID already exists, it will be
     /// overwritten.
-    pub async fn store_app(&self, application: Application) {
+    pub(crate) async fn store_app(&self, application: Application) {
         self.database
             .applications_write()
             .await
@@ -153,6 +153,69 @@ impl State {
             app.disable().await;
         }
 
+        Ok(())
+    }
+
+    /// Renames the application title across multiple internal database collections.
+    ///
+    /// This asynchronous function updates references of an application's title
+    /// from `old_title` to `new_title` in various database sections:
+    /// - Async operations (`async_ops`)
+    /// - Resources (`resources`)
+    /// - Tasks (`tasks`)
+    /// - Task operations (`tasks_ops`)
+    /// - Polls (`polls`)
+    ///
+    /// For collections that store values implementing the `HasAppName` trait,
+    /// the function also updates the `app_name` field accordingly.
+    ///
+    /// # Parameters
+    ///
+    /// * `new_title` - The new application title to replace the old one.
+    /// * `old_title` - The old application title that needs to be replaced.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` if all renaming operations succeed,
+    /// or a `TraceError` if any step encounters an error.
+    pub async fn edit_app(&self, new_title: String, old_title: String) -> Result<(), TraceError> {
+        {
+            let mut async_guard = self.database.async_ops_write().await;
+            rename_database_keys(&mut async_guard, new_title.clone(), old_title.clone());
+        }
+
+        {
+            let mut resource_guard = self.database.resources_write().await;
+            rename_database_keys_and_app_name(
+                &mut resource_guard,
+                new_title.clone(),
+                old_title.clone(),
+            );
+        }
+
+        {
+            let mut tasks_guard = self.database.tasks_write().await;
+            rename_database_keys_and_app_name(
+                &mut tasks_guard,
+                new_title.clone(),
+                old_title.clone(),
+            );
+        }
+
+        {
+            let mut tasks_ops_guard = self.database.tasks_ops_write().await;
+            rename_database_keys(&mut tasks_ops_guard, new_title.clone(), old_title.clone());
+        }
+
+        {
+            let mut poll_guard = self.database.polls_write().await;
+            for poll_arc in poll_guard.iter_mut() {
+                let poll_mut = Arc::make_mut(poll_arc);
+                if poll_mut.app_name == Some(old_title.clone()) {
+                    poll_mut.app_name = Some(new_title.clone());
+                }
+            }
+        }
         Ok(())
     }
 
@@ -368,7 +431,7 @@ impl State {
     /// If the status is `Disconnected` or `Error`, all running tasks for
     /// that app are marked as stopped. If the application is disabled,
     /// the update is ignored. If `app_id` is not found, a warning is logged.
-    pub async fn handle_app_conn_update(&self, app_id: Uuid, conn_status: ConnectionStatus) {
+    pub(crate) async fn handle_app_conn_update(&self, app_id: Uuid, conn_status: ConnectionStatus) {
         // For disconnects or errors, stop all running tasks of the app
         if matches!(conn_status, ConnectionStatus::Disconnected)
             || matches!(conn_status, ConnectionStatus::Error(_))
@@ -680,7 +743,7 @@ impl State {
     ///
     /// Each entry is an `Arc<Resource>` representing the latest known
     /// state of that resource.
-    pub async fn get_resources(&self) -> Vec<Arc<Resource>> {
+    pub(crate) async fn get_resources(&self) -> Vec<Arc<Resource>> {
         self.database
             .resources_read()
             .await
@@ -693,7 +756,7 @@ impl State {
     ///
     /// Each `Poll` is wrapped in an `Arc`. The returned vector preserves
     /// insertion order.
-    pub async fn get_polls(&self) -> Vec<Arc<Poll>> {
+    pub(crate) async fn get_polls(&self) -> Vec<Arc<Poll>> {
         self.database.polls_read().await
     }
 
@@ -886,7 +949,7 @@ impl State {
     /// Returns a vector of `Arc<TaskOp>`, each containing the task’s
     /// ID, optional name and color, and the sequence of `CPUOverview`
     /// entries representing its polling history.
-    pub async fn get_tasks_ops(&self) -> Vec<Arc<TaskOp>> {
+    pub(crate) async fn get_tasks_ops(&self) -> Vec<Arc<TaskOp>> {
         self.database
             .tasks_ops_read()
             .await

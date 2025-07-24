@@ -1,7 +1,7 @@
 //! Defines resources tracked in the trace domain and implements storage.
 
 use super::storable::Storable;
-use crate::domain::duration::Duration;
+use crate::domain::{duration::Duration, has_app_name::HasAppName};
 use crate::error::Error as TraceError;
 use crate::mappers::read_file;
 use async_trait::async_trait;
@@ -67,5 +67,11 @@ impl Storable<HashMap<String, Resource>> for Resource {
         let resources =
             serde_json::from_str::<HashMap<String, Resource>>(&s).map_err(TraceError::Serde)?;
         Ok(resources)
+    }
+}
+
+impl HasAppName for Resource {
+    fn set_app_name(&mut self, new_app_name: String) {
+        self.app_name = Some(new_app_name.clone());
     }
 }

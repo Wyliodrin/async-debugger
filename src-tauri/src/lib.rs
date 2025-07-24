@@ -83,6 +83,7 @@ pub async fn run() {
             commands::applications::delete_application,
             commands::applications::disable_app,
             commands::applications::enable_app,
+            commands::applications::edit_application,
             commands::tasks::remove_task,
             commands::tasks::edit_task,
             commands::channels::send_debug_event,
