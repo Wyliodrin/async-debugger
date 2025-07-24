@@ -81,7 +81,7 @@ impl Database {
     ///
     /// For each entity type, attempts to read `<storage_folder>/<title>.json`.
     /// - If the file is missing, logs a debug‐level message and continues with an empty collection.
-/// - On any other error (I/O, serialization, etc.), returns `Err(TraceError)`.
+    /// - On any other error (I/O, serialization, etc.), returns `Err(TraceError)`.
     ///
     /// # Errors
     /// Returns a `TraceError` if any non-`PathNotFound` error occurs during loading.
@@ -96,14 +96,14 @@ impl Database {
                 Err(error) => match error {
                     TraceError::PathNotFound(_) => {
                         debug!("Applications file not found, using empty list");
-                HashMap::new()
-            }
+                        HashMap::new()
+                    }
                     _ => {
                         error!("Failed to load applications due to {error:?}");
                         return Err(error);
-            }
+                    }
                 },
-        };
+            };
         debug!(
             "Successfully loaded {} applications from disk.",
             applications.values().len()
@@ -118,12 +118,12 @@ impl Database {
             Err(error) => match error {
                 TraceError::PathNotFound(_) => {
                     debug!("Tasks file not found, using empty list");
-                HashMap::new()
-            }
+                    HashMap::new()
+                }
                 _ => {
                     error!("Failed to load tasks due to {error:?}");
                     return Err(error);
-            }
+                }
             },
         };
         debug!(
@@ -141,14 +141,14 @@ impl Database {
                 Err(error) => match error {
                     TraceError::PathNotFound(_) => {
                         debug!("Tasks file not found, using empty list");
-                HashMap::new()
-            }
+                        HashMap::new()
+                    }
                     _ => {
                         error!("Failed to load resources due to {error:?}");
                         return Err(error);
-            }
+                    }
                 },
-        };
+            };
         debug!(
             "Successfully loaded {} resources from disk.",
             resources.values().len()
@@ -160,12 +160,12 @@ impl Database {
             Err(error) => match error {
                 TraceError::PathNotFound(_) => {
                     debug!("Polls file not found, using empty list");
-                Vec::new()
-            }
+                    Vec::new()
+                }
                 _ => {
                     error!("Failed to load polls due to {error:?}");
                     return Err(error);
-            }
+                }
             },
         };
         debug!(
@@ -182,14 +182,14 @@ impl Database {
                 Err(error) => match error {
                     TraceError::PathNotFound(_) => {
                         debug!("Async_op file not found, using empty list");
-                HashMap::new()
-            }
+                        HashMap::new()
+                    }
                     _ => {
                         error!("Failed to load polls due to {error:?}");
                         return Err(error);
-            }
+                    }
                 },
-        };
+            };
 
         // Load tasks_ops
         let tasks_ops = match TaskOp::load_all(storage_folder.clone()).await {
@@ -200,12 +200,12 @@ impl Database {
             Err(error) => match error {
                 TraceError::PathNotFound(_) => {
                     debug!("Tasks_ops file not found, using empty list");
-                HashMap::new()
-            }
+                    HashMap::new()
+                }
                 _ => {
                     error!("Failed to load polls due to {error:?}");
                     return Err(error);
-            }
+                }
             },
         };
         debug!("Loaded {} tasks_ops", tasks_ops.len());

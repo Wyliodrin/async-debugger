@@ -1,7 +1,7 @@
 //! Convert from `console_api::resources::Resource` to our domain `Resource`.
 
-use crate::domain::resource::{Resource, ResourceStatus};
 use crate::domain::duration::Duration;
+use crate::domain::resource::{Resource, ResourceStatus};
 use console_api::resources;
 use console_api::resources::resource::kind;
 

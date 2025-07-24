@@ -39,7 +39,7 @@ export default defineComponent({
     { title: 'Kind', key: 'kind' },
     { title: 'Timestamp', key: 'ts' },
     { title: 'Payload', key: 'payload' }
-  ]" :items="rows" :items-per-page="5">
+  ]" :items="rows" :items-per-page="15">
     <template #item.ts="{ item }">
       {{ new Date(item.ts).toLocaleTimeString() }}
     </template>
