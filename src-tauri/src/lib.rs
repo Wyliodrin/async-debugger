@@ -3,7 +3,6 @@ mod common;
 mod domain;
 mod error;
 mod infra;
-pub mod macros;
 mod mappers;
 mod state_manager;
 

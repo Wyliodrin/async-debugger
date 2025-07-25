@@ -1,4 +1,9 @@
+use crate::commands::debug_server::debug_proto::debug_channel_client::DebugChannelClient;
+use std::sync::Arc;
+use serde::Serialize;
 use tauri::{AppHandle, Emitter};
+use tokio::sync::{Mutex as TokioMutex, OnceCell};
+use tonic::transport::Channel;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 
@@ -16,6 +21,12 @@ impl DebugService {
     pub fn new(app_handle: AppHandle) -> Self {
         Self { app_handle }
     }
+}
+
+#[derive(Serialize)]
+pub enum DebugResult {
+    Ok(),
+    Err(String),
 }
 
 #[tonic::async_trait]
@@ -61,4 +72,17 @@ pub fn start_debug_server(app_handle: &AppHandle) {
             eprintln!("gRPC server error: {e}");
         }
     });
+}
+
+static DEBUG_CLIENT: OnceCell<Arc<TokioMutex<DebugChannelClient<Channel>>>> = OnceCell::const_new();
+
+pub async fn init_debug_client() -> anyhow::Result<Arc<TokioMutex<DebugChannelClient<Channel>>>> {
+    if let Some(client) = DEBUG_CLIENT.get() {
+        return Ok(client.clone());
+    }
+
+    let client = DebugChannelClient::connect("http://127.0.0.1:50051").await?;
+    let arc = Arc::new(TokioMutex::new(client));
+    DEBUG_CLIENT.set(arc.clone()).unwrap();
+    Ok(arc)
 }
