@@ -83,7 +83,7 @@ pub async fn init_debug_client() -> anyhow::Result<Arc<TokioMutex<DebugChannelCl
 
     let client = DebugChannelClient::connect("http://127.0.0.1:50051").await?;
     let arc = Arc::new(TokioMutex::new(client));
-    DEBUG_CLIENT.set(arc.clone()).unwrap();
+    DEBUG_CLIENT.set(arc.clone())?;
     println!("connected to the debug channel");
     Ok(arc)
 }

@@ -6,5 +6,5 @@ async fn main() {
     env_logger::init();
 
     println!("Starting");
-    tokio_display_lib::run().await
+    async_debugger_lib::run().await
 }

@@ -2,13 +2,32 @@ use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::quote;
 use syn::{
-    Expr, ExprLit, ExprLoop, ItemFn, Lit, Meta, MetaNameValue, Stmt,
     fold::Fold,
     parse::{Parse, ParseStream},
     parse_macro_input,
     punctuated::Punctuated,
     token::Comma,
+    Expr, ExprLit, ExprLoop, FnArg, ItemFn, Lit, Meta, MetaNameValue, Stmt, Type, TypePath,
 };
+
+fn detect_channel_kind(func: &ItemFn) -> String {
+    for input in &func.sig.inputs {
+        if let FnArg::Typed(pat_type) = input {
+            if let Type::Path(TypePath { path, .. }) = &*pat_type.ty {
+                let segments: Vec<_> = path.segments.iter().map(|s| s.ident.to_string()).collect();
+                // segments might be ["tokio", "sync", "mpsc", "Sender"]
+                if let Some(pos) = segments
+                    .iter()
+                    .position(|id| ["mpsc", "oneshot", "broadcast", "watch"].contains(&id.as_str()))
+                {
+                    return segments[pos].clone();
+                }
+            }
+        }
+    }
+    // fallback if none matched
+    "unknown".into()
+}
 
 struct Args {
     name: String,
@@ -52,7 +71,8 @@ impl Parse for Args {
 /// Walk every `loop { … }` in the function body and append a debug‐send snippet at the end.
 struct LoopInstrumenter {
     event_name: String,
-    expr: Expr,
+    payload_expr: Expr,
+    channel_kind: String,
 }
 
 impl Fold for LoopInstrumenter {
@@ -70,9 +90,9 @@ impl Fold for LoopInstrumenter {
         let mut new_body = body;
         new_body = syn::fold::fold_block(self, new_body);
 
-        // Build the snippet that serializes `self.expr` and sends it
         let name_lit = &self.event_name;
-        let expr = &self.expr;
+        let expr = &self.payload_expr;
+        let channel_kind_lit = &self.channel_kind;
         let debug_send: Stmt = syn::parse2(quote! {
             {
                 use chrono::Utc;
@@ -87,11 +107,11 @@ impl Fold for LoopInstrumenter {
                 };
 
                 let __proto = DebugEvent {
-                    name: #name_lit.to_string(),
-                    kind: "loop".to_string(),
-                    ts: Utc::now().timestamp_millis(),
-                    payload: __dbg_payload_data,
-                };
+            name: #name_lit.to_string(),
+            kind: #channel_kind_lit.to_string(),
+            ts: Utc::now().timestamp_millis(),
+            payload: __dbg_payload_data,
+        };
                 let __client = __dbg_client.clone();
                 tokio::spawn(async move {
                     if let Err(e) = __client.lock().await.send_event(__proto).await {
@@ -126,10 +146,12 @@ pub fn debug_event(attr: TokenStream, item: TokenStream) -> TokenStream {
             .into();
     }
 
+    let channel_kind = detect_channel_kind(&func);
     let orig_block = *func.block;
     let mut folder = LoopInstrumenter {
         event_name: name.clone(),
-        expr,
+        payload_expr: expr,
+        channel_kind,
     };
     let folded_block = folder.fold_block(orig_block);
 
