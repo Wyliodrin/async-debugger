@@ -1,6 +1,6 @@
 use crate::commands::debug_server::debug_proto::debug_channel_client::DebugChannelClient;
-use std::sync::Arc;
 use serde::Serialize;
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::{Mutex as TokioMutex, OnceCell};
 use tonic::transport::Channel;
@@ -84,5 +84,6 @@ pub async fn init_debug_client() -> anyhow::Result<Arc<TokioMutex<DebugChannelCl
     let client = DebugChannelClient::connect("http://127.0.0.1:50051").await?;
     let arc = Arc::new(TokioMutex::new(client));
     DEBUG_CLIENT.set(arc.clone()).unwrap();
+    println!("connected to the debug channel");
     Ok(arc)
 }

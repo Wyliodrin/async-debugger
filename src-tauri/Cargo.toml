@@ -19,7 +19,7 @@ tauri-build = { version = "2", features = [] }
 tonic-build = "0.12"
 
 [dependencies]
-tokio = { version = "1.43.0", features = ["sync"] }
+tokio = { version = "1", features = ["sync", "net"] }
 tauri = { version = "2", features = ["devtools"] }
 tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }

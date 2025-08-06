@@ -11,6 +11,6 @@ proc-macro2 = "1.0"
 quote         = "1.0"
 syn           = { version = "2.0", features = ["full"] }
 async_debugger = { package = "tokio-display", path = "/home/tlgn/Desktop/async-debugger/src-tauri/" }
-tokio = { version = "1.43.0", features = ["sync"] }
+tokio = { version = "1", features = ["sync", "net"] }
 tonic = "0.12.3"
 serde = "1.0.219"

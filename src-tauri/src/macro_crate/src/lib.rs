@@ -2,108 +2,146 @@ use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::quote;
 use syn::{
-    Expr, ExprLit, ItemFn, Lit, Meta, MetaNameValue,
+    Expr, ExprLit, ExprLoop, ItemFn, Lit, Meta, MetaNameValue, Stmt,
+    fold::Fold,
     parse::{Parse, ParseStream},
     parse_macro_input,
     punctuated::Punctuated,
     token::Comma,
 };
 
-struct Args(Punctuated<Meta, Comma>);
-impl Parse for Args {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        Ok(Args(input.parse_terminated(Meta::parse, Comma)?))
-    }
+struct Args {
+    name: String,
+    expr: Expr,
 }
 
-fn parse_name_arg(metas: Punctuated<Meta, Comma>) -> syn::Result<String> {
-    for meta in metas {
-        if let Meta::NameValue(MetaNameValue { path, value, .. }) = meta {
-            if path.is_ident("name") {
-                if let Expr::Lit(ExprLit {
-                    lit: Lit::Str(s), ..
-                }) = value
-                {
-                    return Ok(s.value());
-                } else {
-                    return Err(syn::Error::new_spanned(
-                        path,
-                        "expected `name = \"…\"` to be a string literal",
-                    ));
+impl Parse for Args {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut name = None;
+        let mut expr = None;
+
+        let metas: Punctuated<Meta, Comma> = input.parse_terminated(Meta::parse, Comma)?;
+        for meta in metas {
+            if let Meta::NameValue(MetaNameValue { path, value, .. }) = meta {
+                if path.is_ident("name") {
+                    if let Expr::Lit(ExprLit {
+                        lit: Lit::Str(s), ..
+                    }) = value
+                    {
+                        name = Some(s.value());
+                    } else {
+                        return Err(syn::Error::new_spanned(
+                            path,
+                            "expected `name = \"…\"` to be a string literal",
+                        ));
+                    }
+                } else if path.is_ident("expr") {
+                    expr = Some(value);
                 }
             }
         }
+
+        let name =
+            name.ok_or_else(|| syn::Error::new(Span::call_site(), "missing `name = \"…\"`"))?;
+        let expr = expr.ok_or_else(|| syn::Error::new(Span::call_site(), "missing `expr = …`"))?;
+
+        Ok(Args { name, expr })
     }
-    Err(syn::Error::new(
-        Span::call_site(),
-        "missing required `name = \"…\"` argument",
-    ))
+}
+
+/// Walk every `loop { … }` in the function body and append a debug‐send snippet at the end.
+struct LoopInstrumenter {
+    event_name: String,
+    expr: Expr,
+}
+
+impl Fold for LoopInstrumenter {
+    fn fold_expr_loop(&mut self, expr_loop: ExprLoop) -> ExprLoop {
+        // Destructure the incoming loop
+        let ExprLoop {
+            attrs,
+            label,
+            loop_token,
+            body,
+            ..
+        } = expr_loop;
+
+        // Recursively fold any nested loops first
+        let mut new_body = body;
+        new_body = syn::fold::fold_block(self, new_body);
+
+        // Build the snippet that serializes `self.expr` and sends it
+        let name_lit = &self.event_name;
+        let expr = &self.expr;
+        let debug_send: Stmt = syn::parse2(quote! {
+            {
+                use chrono::Utc;
+                use async_debugger::commands::debug_server::debug_proto::DebugEvent;
+
+                let __dbg_payload_data = match serde_json::to_string(& ( #expr )) {
+                    Ok(s)  => s,
+                    Err(e) => {
+                        eprintln!("debug_event payload serialize failed: {}", e);
+                        String::new()
+                    }
+                };
+
+                let __proto = DebugEvent {
+                    name: #name_lit.to_string(),
+                    kind: "loop".to_string(),
+                    ts: Utc::now().timestamp_millis(),
+                    payload: __dbg_payload_data,
+                };
+                let __client = __dbg_client.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = __client.lock().await.send_event(__proto).await {
+                        eprintln!("debug_event send in loop failed: {}", e);
+                    }
+                });
+            }
+        })
+        .expect("failed to parse debug send snippet");
+
+        new_body.stmts.push(debug_send);
+
+        // Reconstruct the loop
+        ExprLoop {
+            attrs,
+            label,
+            loop_token,
+            body: *Box::new(new_body),
+            ..expr_loop
+        }
+    }
 }
 
 #[proc_macro_attribute]
 pub fn debug_event(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let Args(metas) = parse_macro_input!(attr as Args);
-    let name = match parse_name_arg(metas) {
-        Ok(n) => n,
-        Err(err) => return err.to_compile_error().into(),
-    };
+    let Args { name, expr } = parse_macro_input!(attr as Args);
 
     let mut func = parse_macro_input!(item as ItemFn);
-
     if func.sig.asyncness.is_none() {
-        return syn::Error::new_spanned(
-            &func.sig,
-            "`#[debug_event]` can only be applied to async fns",
-        )
-        .to_compile_error()
-        .into();
+        return syn::Error::new_spanned(&func.sig, "must be async")
+            .to_compile_error()
+            .into();
     }
 
-    let output_ty = match &func.sig.output {
-        syn::ReturnType::Default => quote! { () },
-        syn::ReturnType::Type(_, ty) => quote! { #ty },
+    let orig_block = *func.block;
+    let mut folder = LoopInstrumenter {
+        event_name: name.clone(),
+        expr,
     };
+    let folded_block = folder.fold_block(orig_block);
 
-    let orig = &func.block;
-
-    let instrumented = quote!({
+    func.block = syn::parse2(quote!({
         let __dbg_client = match async_debugger::commands::debug_server::init_debug_client().await {
-            Ok(c)    => c,
-            Err(e)   => { eprintln!("debug_event init failed: {}", e); return Err(e.into()); }
+            Ok(c)  => c,
+            Err(e) => { eprintln!("debug_event init failed: {}", e); return Err(e.into()); }
         };
 
-        let __dbg_result: #output_ty = async move #orig.await;
-        let debug_result = match &__dbg_result {
-            Ok(v)  => async_debugger::commands::debug_server::DebugResult::Ok(),
-            Err(e) => async_debugger::commands::debug_server::DebugResult::Err(e.to_string()),
-        };
-        let __dbg_payload = match serde_json::to_string(&debug_result) {
-            Ok(s)  => s,
-            Err(e) => { eprintln!("debug_event serialize failed: {}", e); String::new() }
-        };
-
-        {
-            use chrono::Utc;
-            use async_debugger::commands::debug_server::debug_proto::DebugEvent;
-            let __proto = DebugEvent {
-                name:    #name.to_string(),
-                kind:    "mpsc".to_string(),
-                ts:      Utc::now().timestamp_millis(),
-                payload: __dbg_payload,
-            };
-            let __client = __dbg_client.clone();
-            tokio::spawn(async move {
-                if let Err(e) = __client.lock().await.send_event(__proto).await {
-                    eprintln!("debug_event send failed: {}", e);
-                }
-            });
-        }
-
-        __dbg_result
-    });
-
-    func.block =
-        syn::parse2(instrumented).expect("internal error: failed to parse instrumented block");
+        #folded_block
+    }))
+    .expect("failed to build wrapper block");
 
     TokenStream::from(quote! { #func })
 }
