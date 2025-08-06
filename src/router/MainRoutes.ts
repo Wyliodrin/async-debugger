@@ -26,11 +26,6 @@ const MainRoutes = {
             component: () => import('@/views/Resources.vue')
         },
         {
-            name: 'Channels Overview',
-            path: '/channels-overview',
-            component: () => import('@/views/Channels.vue')
-        },
-        {
             name: 'Polling Overview',
             path: '/polls-overview',
             component: () => import('@/views/Polls.vue')

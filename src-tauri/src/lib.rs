@@ -3,7 +3,6 @@ mod common;
 mod domain;
 mod error;
 mod infra;
-pub mod macros;
 mod mappers;
 mod state_manager;
 
@@ -11,8 +10,6 @@ use state_manager::StateManager;
 use std::{sync::Arc, time::Duration};
 use tauri::{async_runtime, Manager};
 use tokio::{task, time::sleep};
-
-use crate::commands::channels::DebugSenderState;
 
 /// Boots and runs the Tauri application, setting up state, background tasks,
 /// and UI event loops.
@@ -51,7 +48,6 @@ pub async fn run() {
         .plugin(tauri_plugin_dialog::init())
         // Make our shared state available via Tauri’s state‐injection API.
         .manage(shared_state)
-        .manage(DebugSenderState::default())
         .setup(move |app| {
             // Workaround: Tonic crate may fail to compile in debug mode unless we
             // explicitly release–build. We keep this comment until upstream fixes it.
@@ -62,7 +58,6 @@ pub async fn run() {
             window.open_devtools();
 
             let app_handle = app.handle().clone();
-            crate::commands::debug_server::start_debug_server(&app_handle);
             // Periodically emit UI updates once per second.
             async_runtime::spawn(async move {
                 loop {
@@ -87,7 +82,6 @@ pub async fn run() {
             commands::applications::edit_application,
             commands::tasks::remove_task,
             commands::tasks::edit_task,
-            commands::channels::send_debug_event,
         ])
         // Launch the Tauri event loop with our generated context.
         .run(tauri::generate_context!())
