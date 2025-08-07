@@ -44,7 +44,14 @@ pub fn get_pid_hosting_at(url: Url) -> Option<u32> {
 
         // Parse the PID out of the stdout
         let output_str = String::from_utf8_lossy(&output.stdout);
-        output_str.trim().parse().ok()
+                // In case the tracked app is restarted, lsof prints two PIDS and the correct PID is typically the last whitespace-separated token.
+                if let Some(pid_str) = output_str.lines().last() {
+                    if let Ok(pid) = pid_str.parse::<u32>() {
+                        println!("{:?}", pid);
+                        return Some(pid);
+                    }
+                }
+        None
     }
 
     #[cfg(target_os = "windows")]

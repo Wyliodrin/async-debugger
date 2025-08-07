@@ -230,7 +230,7 @@ impl ConnectionManager {
                                     }
                                 }
                                 // Should refresh data stored about app
-                                // TODO TEST: cgecj if we receive the app updates once per second
+                                // TODO TEST: check if we receive the app updates once per second
                                 _ = refresh.tick() => {
                                     debug!("Sending application info refresh");
                                     if let Some(app_update)= {
