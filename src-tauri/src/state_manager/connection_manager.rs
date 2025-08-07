@@ -251,11 +251,11 @@ impl ConnectionManager {
                                             if new_pid != pid {
                                                 pid = new_pid;
                                             }
-                                            else{
+                                            else {
                                                 updates_sender.send((cloned_id, Event::Error(TraceError::CannotReadProcessInfo { pid }))).await.ok();
                                             }
                                         }
-                                        else{
+                                        else {
                                             updates_sender.send((cloned_id, Event::Error(TraceError::CannotReadProcessInfo { pid }))).await.ok();
                                         }
                                     }

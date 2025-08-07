@@ -86,6 +86,7 @@ listen<any[]>('update:resources', e => {
       <v-data-table
         :headers="resourcesHeaders"
         :items="filteredResources"
+        :item-value="item => `${item.app_name}-${item.id}`"
       >
         <template #item.status="{ item }">
           <v-chip

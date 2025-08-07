@@ -28,7 +28,7 @@ impl Duration {
     /// assert_eq!(d.formatted, "2ms");
     /// ```
     pub fn new(seconds: i64, nanos: i32) -> Self {
-        let formatted = Self::get_correct_subdivision_sec(nanos);
+        let formatted = Self::get_formatted_duration(seconds, nanos);
         Self {
             seconds,
             nanos,
@@ -36,29 +36,67 @@ impl Duration {
         }
     }
 
-    /// Returns a human‐readable sub‐division for the given nanosecond count.
+    /// Returns a human‐readable duration for the given seconds and nanoseconds count.
     ///
-    /// - `>= 1_000_000` ⇒ milliseconds (rounded)
-    /// - `>= 1_000`     ⇒ microseconds (rounded)
-    /// - otherwise      ⇒ nanoseconds
+    /// The output format adapts to the magnitude of the duration:
+    ///
+    /// - If `seconds >= 3600`: shows hours and minutes (e.g., `"1h 30min"`)
+    /// - If `seconds >= 60`: shows minutes and seconds (e.g., `"3min 45s"`)
+    /// - If `seconds > 0`: shows seconds and a sub-second unit (e.g., `"2s 500ms"`)
+    /// - If `seconds == 0`: shows only the sub-second unit:
+    ///     - `>= 1_000_000` nanoseconds → milliseconds, rounded
+    ///     - `>= 1_000` nanoseconds → microseconds, rounded
+    ///     - `< 1_000` nanoseconds → nanoseconds
+    ///
+    /// # Arguments
+    ///
+    /// * `seconds` - Number of whole seconds
+    /// * `nanos` - Number of nanoseconds (0–999_999_999)
+    ///
+    /// # Returns
+    ///
+    /// A `String` representing the duration in a human-readable format.
     ///
     /// # Examples
     ///
     /// ```
     /// use your_crate::domain::durations::Duration;
-    /// assert_eq!(Duration::get_correct_subdivision_sec(2_500_000), "3ms");
-    /// assert_eq!(Duration::get_correct_subdivision_sec(2_500), "3μs");
-    /// assert_eq!(Duration::get_correct_subdivision_sec(250), "250ns");
+    ///
+    /// assert_eq!(Duration::get_formatted_duration(0, 2_500_000), "3ms");
+    /// assert_eq!(Duration::get_formatted_duration(0, 2_500), "3μs");
+    /// assert_eq!(Duration::get_formatted_duration(0, 250), "250ns");
+    /// assert_eq!(Duration::get_formatted_duration(75, 1_200_000), "1min 15s");
+    /// assert_eq!(Duration::get_formatted_duration(3_780, 500_000), "1h 3min");
+    /// assert_eq!(Duration::get_formatted_duration(2, 1_500_000), "2s 2ms");
     /// ```
-    pub fn get_correct_subdivision_sec(nano: i32) -> String {
-        if nano >= 1_000_000 {
-            return format!("{}ms", ((nano as f64) / 1_000_000.0).round() as i32);
+    pub fn get_formatted_duration(seconds: i64, nanos: i32) -> String {
+        if seconds > 3_600 {
+            let hours = ((seconds as f64) / 3_600.0).floor() as i64;
+            return format!(
+                "{}h {}min",
+                hours,
+                (((seconds - hours * 3_600) as f64) / 60.0).round() as i64
+            );
         }
 
-        if nano >= 1_000 {
-            return format!("{}μs", ((nano as f64) / 1_000.0).round() as i32);
+        if seconds > 60 {
+            let minutes = ((seconds as f64) / 60.0).floor() as i64;
+            return format!("{}min {}s", minutes, seconds - minutes * 60);
         }
 
-        format!("{}ns", nano)
+        let sub_seconds_format;
+        if nanos >= 1_000_000 {
+            sub_seconds_format = format!("{}ms", ((nanos as f64) / 1_000_000.0).round() as i32);
+        } else if nanos >= 1_000 {
+            sub_seconds_format = format!("{}μs", ((nanos as f64) / 1_000.0).round() as i32);
+        } else {
+            sub_seconds_format = format!("{}ns", nanos);
+        }
+
+        if seconds > 0 {
+            return format!("{}s {}", seconds, sub_seconds_format);
+        } else {
+            return sub_seconds_format;
+        }
     }
 }

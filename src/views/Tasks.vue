@@ -183,6 +183,7 @@ listen<any[]>('update:tasks', e => {
       <v-data-table
         :headers="taskHeaders"
         :items="filteredTasks"
+        :item-value="item => `${item.app_name}-${item.id}-${item.tid}`"
       >
         <template #item.kind="{ item }">
           <v-chip
