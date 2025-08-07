@@ -34,3 +34,9 @@ dist-ssr
 src-tauri/gen/schemas
 
 package-lock.json
+
+
+# Added by cargo
+
+/target
+/Cargo.lock
