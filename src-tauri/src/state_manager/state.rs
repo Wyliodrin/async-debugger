@@ -4,12 +4,12 @@ use crate::common::{get_pid_hosting_at, rename_database_keys, rename_database_ke
 use crate::domain::application::{ApplicationState, ConnectionStatus};
 use crate::domain::async_op::{CPUOverview, TaskOp, TimeStamp};
 use crate::domain::resource::ResourceStatus;
-use crate::domain::{duration::Duration, TaskState};
+use crate::domain::{TaskState, duration::Duration};
 use crate::error::Error as TraceError;
 use crate::infra::guard::DataBaseWrite;
 use crate::infra::storage::Storage;
 use crate::{
-    domain::{application::Application, poll::Poll, resource::Resource, Task},
+    domain::{Task, application::Application, poll::Poll, resource::Resource},
     mappers::{
         async_ops::map_to_domain_async_op, poll::map_to_domain_poll,
         resources::map_to_domain_resource, tasks::map_to_domain_task,
@@ -65,7 +65,9 @@ impl State {
         if !database_path.is_dir() {
             // Create the storage folder
             if let Err(error) = fs::create_dir(&database_path).await {
-                error!("Could not create the storage folder at path {database_path:?} due to {error:?}");
+                error!(
+                    "Could not create the storage folder at path {database_path:?} due to {error:?}"
+                );
                 return Err(TraceError::CannotCreateStorage {
                     error: error.into(),
                     path: database_path.to_string_lossy().to_string(),
@@ -432,27 +434,44 @@ impl State {
     /// that app are marked as stopped. If the application is disabled,
     /// the update is ignored. If `app_id` is not found, a warning is logged.
     pub(crate) async fn handle_app_conn_update(&self, app_id: Uuid, conn_status: ConnectionStatus) {
-        // For disconnects or errors, stop all running tasks of the app
-        if matches!(conn_status, ConnectionStatus::Disconnected)
-            || matches!(conn_status, ConnectionStatus::Error(_))
-        {
-            let mut tasks_guard = self.database.tasks_write().await;
-            let prefix = format!("{}.", app_id);
-            for (key, task_arc) in tasks_guard.iter_mut() {
-                if key.starts_with(&prefix) {
-                    let t = Arc::make_mut(task_arc);
-                    if matches!(t.state, TaskState::Running) {
-                        t.state = TaskState::Stopped {
-                            at: Utc::now(),
-                            reason: None,
-                        };
+        let mut guard = self.database.applications_write().await;
+        if let Some((_uuid, app)) = guard.iter_mut().find(|(_uuid, app)| app.id().eq(&app_id)) {
+            // For disconnects or errors, stop all running tasks of the app
+            if matches!(conn_status, ConnectionStatus::Disconnected)
+                || matches!(conn_status, ConnectionStatus::Error(_))
+            {
+                {
+                    let mut tasks_guard = self.database.tasks_write().await;
+                    let prefix = format!("{}.", app.title());
+                    for (key, task_arc) in tasks_guard.iter_mut() {
+                        if key.starts_with(&prefix) {
+                            let t = Arc::make_mut(task_arc);
+                            if matches!(t.state, TaskState::Running) {
+                                t.state = TaskState::Stopped {
+                                    at: Utc::now(),
+                                    reason: None,
+                                };
+
+                                // maybe update the runtime, busy, schedule as well or just runtime
+                            }
+                        }
+                    }
+                }
+
+                {
+                    let mut resources_guard = self.database.resources_write().await;
+                    let prefix = format!("{}.", app.title());
+                    for (key, resource_arc) in resources_guard.iter_mut() {
+                        if key.starts_with(&prefix) {
+                            let r = Arc::make_mut(resource_arc);
+                            if matches!(r.status, ResourceStatus::Ready) {
+                                r.status = ResourceStatus::Dropped;
+                            }
+                        }
                     }
                 }
             }
-        }
-        // Update app connection status
-        let mut guard = self.database.applications_write().await;
-        if let Some((_uuid, app)) = guard.iter_mut().find(|(_uuid, app)| app.id().eq(&app_id)) {
+            // Update app connection status
             if app.state() == ApplicationState::Disabled {
                 // If app is disabled we dont save anything
                 return;

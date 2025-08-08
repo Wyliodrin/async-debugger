@@ -20,7 +20,6 @@ const resourcesHeaders = ref<DataTableHeader[]>([
 
 function getResourceChipColor(status: string){
     switch(status){
-        case 'Pending': return 'brown'
         case 'Ready': return 'green'
         default:        return 'gray'
     }

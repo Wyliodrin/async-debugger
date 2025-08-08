@@ -13,8 +13,6 @@ use std::collections::HashMap;
 pub enum ResourceStatus {
     /// Resource is fully initialized and ready.
     Ready,
-    /// Resource is pending initialization.
-    Pending,
     /// Resource has been dropped or cleaned up.
     Dropped,
 }

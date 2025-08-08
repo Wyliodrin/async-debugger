@@ -38,8 +38,8 @@ async fn main() {
     }
     println!("stressing cpu");
     //burn_cpu_for(20);
-    io::stdin().read_line(&mut input).unwrap();
     println!("press something to exit");
+    io::stdin().read_line(&mut input).unwrap();
 }
 
 fn burn_cpu_for(seconds: u64) {
