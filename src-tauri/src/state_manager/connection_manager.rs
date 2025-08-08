@@ -50,6 +50,8 @@ pub enum Event {
     Error(TraceError),
     /// The connection has been shut down.
     Disconnected,
+    /// The app restarted and got a new PID
+    PidChanged(u32),
 }
 
 /// Snapshot of local process statistics for an instrumented application.
@@ -96,6 +98,7 @@ impl Clone for Event {
             Event::ApplicationUpdated(a) => Event::ApplicationUpdated(a.clone()),
             Event::Error(_) => panic!("Cannot clone Event::Error (rich TraceError)"),
             Event::Disconnected => Event::Disconnected,
+            Event::PidChanged(pid) => Event::PidChanged(*pid),
         }
     }
 }
@@ -250,6 +253,7 @@ impl ConnectionManager {
                                         if let Some(new_pid) = get_pid_hosting_at(url.clone()){
                                             if new_pid != pid {
                                                 pid = new_pid;
+                                                updates_sender.send((cloned_id, Event::PidChanged(new_pid))).await.ok();
                                             }
                                             else {
                                                 updates_sender.send((cloned_id, Event::Error(TraceError::CannotReadProcessInfo { pid }))).await.ok();

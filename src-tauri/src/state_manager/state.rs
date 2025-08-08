@@ -466,6 +466,24 @@ impl State {
         }
     }
 
+    /// Update the PID for an application in memory and persist it.
+    pub async fn handle_pid_changed(&self, app_id: Uuid, new_pid: u32) {
+        let mut apps = self.database.applications_write().await;
+        if let Some(app) = apps.get_mut(&app_id) {
+            app.writeable().set_pid(new_pid);
+        }
+        // drop guard
+    }
+
+    /// Lookup the current PID for an application.
+    pub async fn get_pid_for(&self, app_id: Uuid) -> Option<u32> {
+        self.get_current_applications_list()
+            .await
+            .into_iter()
+            .find(|app| *app.id() == app_id)
+            .map(|app| app.pid())
+    }
+
     /// Returns all tasks currently stored in memory.
     pub async fn get_tasks(&self) -> Vec<Arc<Task>> {
         self.database.tasks_read().await.values().cloned().collect()

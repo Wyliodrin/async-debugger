@@ -187,6 +187,13 @@ listen<Application[]>("update:applications", (event) => {
     }
 });
 
+listen<{ id: string; pid: number }>('update:pid', (event) => {
+  const { id, pid } = event.payload;
+  const app = applicationsStore.applications.find(a => a.id === id);
+  if (app) {
+    app.pid = pid;
+  }
+});
 
 
 </script>

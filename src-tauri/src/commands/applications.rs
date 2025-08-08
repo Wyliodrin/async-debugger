@@ -145,3 +145,40 @@ pub async fn edit_application(
         .edit_application(uuid, app_title, app_url, old_title)
         .await
 }
+
+/// Update an app’s PID in state and emit it to the frontend.
+///
+/// # Arguments
+/// * `state_manager` – shared application state manager
+/// * `app_handle` – handle for emitting Tauri events
+/// * `uuid` – application identifier
+/// * `new_pid` – freshly discovered process ID
+#[tauri::command]
+pub async fn update_app_pid(
+    state_manager: State<'_, Arc<StateManager>>,
+    app_handle: tauri::AppHandle,
+    uuid: Uuid,
+    new_pid: u32,
+) -> Result<(), Error> {
+    state_manager.state.handle_pid_changed(uuid, new_pid).await;
+
+    state_manager.emit_update_pid(&app_handle, uuid).await;
+
+    Ok(())
+}
+
+/// Fetch the current PID for a given application.
+///
+/// Frontend can call this after seeing a “pid‐changed” message
+/// or poll at intervals.
+#[tauri::command]
+pub async fn get_app_pid(
+    state_manager: State<'_, Arc<StateManager>>,
+    uuid: Uuid,
+) -> Result<u32, Error> {
+    state_manager
+        .state
+        .get_pid_for(uuid)
+        .await
+        .ok_or_else(|| Error::Anyhow(anyhow::anyhow!("App {uuid} not found")))
+}

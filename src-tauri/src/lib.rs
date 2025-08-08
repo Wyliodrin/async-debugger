@@ -80,6 +80,8 @@ pub async fn run() {
             commands::applications::disable_app,
             commands::applications::enable_app,
             commands::applications::edit_application,
+            commands::applications::update_app_pid,
+            commands::applications::get_app_pid,
             commands::tasks::remove_task,
             commands::tasks::edit_task,
         ])

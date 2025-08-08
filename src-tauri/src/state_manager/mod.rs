@@ -179,6 +179,11 @@ impl StateManager {
                         println!("Error with app connection: {err:?}");
                         self.state.handle_app_conn_update(app_id, ConnectionStatus::Error(err.to_string())).await;
                     }
+
+                    Event::PidChanged(new_pid) => {
+                        println!("PID changed to {new_pid}");
+                        self.state.handle_pid_changed(app_id, new_pid).await;
+                    }
                 }
             }
 
@@ -301,6 +306,27 @@ impl StateManager {
     pub async fn delete_connection(&self, uuid: Uuid) {
         self.connection_manager.disconnect_app(uuid).await;
         //     self.state.delete_app(uuid).await
+    }
+
+    /// Emit the latest PID for `app_id` to the frontend.
+    ///
+    /// Listeners should handle the `"update:pid"` event.
+    pub async fn emit_update_pid(&self, app_handle: &AppHandle, app_id: Uuid) {
+        // Fetch the latest PID from State
+        let maybe_pid = {
+            let apps = self.state.get_current_applications_list().await;
+            apps.into_iter()
+                .find(|app| *app.id() == app_id)
+                .map(|app| app.pid())
+        };
+
+        if let Some(pid) = maybe_pid {
+            let payload = serde_json::json!({
+                "id": app_id,
+                "pid": pid,
+            });
+            app_handle.emit("update:pid", payload).ok();
+        }
     }
 
     // endregion
