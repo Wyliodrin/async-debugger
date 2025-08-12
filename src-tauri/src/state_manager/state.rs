@@ -4,12 +4,12 @@ use crate::common::{get_pid_hosting_at, rename_database_keys, rename_database_ke
 use crate::domain::application::{ApplicationState, ConnectionStatus};
 use crate::domain::async_op::{CPUOverview, TaskOp, TimeStamp};
 use crate::domain::resource::ResourceStatus;
-use crate::domain::{TaskState, duration::Duration};
+use crate::domain::{duration::Duration, TaskState};
 use crate::error::Error as TraceError;
 use crate::infra::guard::DataBaseWrite;
 use crate::infra::storage::Storage;
 use crate::{
-    domain::{Task, application::Application, poll::Poll, resource::Resource},
+    domain::{application::Application, poll::Poll, resource::Resource, Task},
     mappers::{
         async_ops::map_to_domain_async_op, poll::map_to_domain_poll,
         resources::map_to_domain_resource, tasks::map_to_domain_task,
@@ -496,11 +496,8 @@ impl State {
 
     /// Lookup the current PID for an application.
     pub async fn get_pid_for(&self, app_id: Uuid) -> Option<u32> {
-        self.get_current_applications_list()
-            .await
-            .into_iter()
-            .find(|app| *app.id() == app_id)
-            .map(|app| app.pid())
+        let apps = self.database.applications_read().await;
+        apps.get(&app_id).map(|app| app.pid())
     }
 
     /// Returns all tasks currently stored in memory.
@@ -996,4 +993,44 @@ impl State {
     }
 
     // endregion
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+    use url::Url;
+
+    async fn make_state() -> State {
+        let dir = tempdir().unwrap();
+        let path = dir.path().to_string_lossy().to_string();
+        let db = Database::new(path);
+        State {
+            database: Arc::new(db),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_and_get_pid() {
+        let state = make_state().await;
+
+        let app = Application::new_mock(
+            "TestApp".into(),
+            Url::parse("http://localhost").unwrap(),
+            1234,
+        );
+        let id = *app.id();
+
+        let app_arc = Arc::new(app);
+        state
+            .database
+            .applications_write()
+            .await
+            .insert(id, Arc::clone(&app_arc));
+
+        assert_eq!(state.get_pid_for(id).await, Some(1234));
+
+        state.handle_pid_changed(id, 5678).await;
+        assert_eq!(state.get_pid_for(id).await, Some(5678));
+    }
 }

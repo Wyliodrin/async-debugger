@@ -154,6 +154,24 @@ impl Application {
             self.state = ApplicationState::Disabled;
         }
     }
+
+    // I need this test here in order for the `state_manager::state::tests::test_handle_and_get_pid`
+    // test to work
+    #[cfg(test)]
+    pub fn new_mock(title: String, url: Url, pid: u32) -> Self {
+        Application {
+            pid,
+            id: Uuid::new_v4(),
+            title,
+            url,
+            start_time: "0".parse().unwrap(),
+            state: ApplicationState::Enabled,
+            connection_status: ConnectionStatus::Disconnected,
+            connection: None,
+            cpu_usage: 0.0,
+            memory_usage: 0,
+        }
+    }
 }
 
 #[async_trait]
@@ -166,5 +184,116 @@ impl Storable<HashMap<Uuid, Application>> for Application {
                 .map_err(|err| TraceError::Serde(err))?;
 
         Ok(apps)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state_manager::connection_manager::Command;
+    use serde_json::to_string_pretty;
+    use std::collections::HashMap;
+    use std::fs;
+    use std::io::Write;
+    use tauri::Url;
+    use tempfile::tempdir;
+    use tokio::sync::mpsc;
+    use uuid::Uuid;
+
+    #[tokio::test]
+    async fn new_without_port_fails() {
+        let url = Url::parse("http://localhost").unwrap();
+        let err = Application::new("NoPort".into(), url).unwrap_err();
+        assert!(matches!(err, TraceError::PIDNotFound { .. }));
+    }
+
+    #[test]
+    fn getters_and_setters_work() {
+        let mut app = Application {
+            pid: 42,
+            id: Uuid::new_v4(),
+            title: "MyApp".into(),
+            url: Url::parse("http://localhost:6000").unwrap(),
+            start_time: "time".into(),
+            cpu_usage: 0.0,
+            memory_usage: 0,
+            state: ApplicationState::Disabled,
+            connection_status: ConnectionStatus::Error("ups".into()),
+            connection: None,
+        };
+
+        app.set_pid(100);
+        assert_eq!(app.pid(), 100);
+
+        app.set_cpu_usage(1.23);
+        assert!((app._cpu_usage() - 1.23).abs() < f32::EPSILON);
+
+        app.set_memory_usage(2048);
+        assert_eq!(app._memory_usage(), 2048);
+
+        app.set_connection_status(ConnectionStatus::Connected);
+        assert_eq!(app._connection_status(), &ConnectionStatus::Connected);
+    }
+
+    #[tokio::test]
+    async fn enable_and_disable_send_disconnect() {
+        let mut app = Application {
+            pid: 1,
+            id: Uuid::new_v4(),
+            title: "Test".into(),
+            url: Url::parse("http://127.0.0.1:8000").unwrap(),
+            start_time: "t0".into(),
+            cpu_usage: 0.0,
+            memory_usage: 0,
+            state: ApplicationState::Disabled,
+            connection_status: ConnectionStatus::Disconnected,
+            connection: None,
+        };
+
+        let (tx, mut rx) = mpsc::channel(1);
+        let conn = Connection { commands: tx };
+
+        app.enable(conn.clone());
+        assert_eq!(app.state(), ApplicationState::Enabled);
+        assert!(app.connection.is_some());
+
+        app.disable().await;
+        assert_eq!(rx.recv().await.unwrap(), Command::Disconnect);
+        assert_eq!(app.state(), ApplicationState::Disabled);
+        assert!(app.connection.is_none());
+    }
+
+    #[tokio::test]
+    async fn storable_roundtrip_via_temp_file() {
+        let uuid = Uuid::new_v4();
+        let mut map = HashMap::new();
+        let sample = Application {
+            pid: 5,
+            id: uuid,
+            title: "X".into(),
+            url: Url::parse("http://127.0.0.1:9000").unwrap(),
+            start_time: "t2".into(),
+            cpu_usage: 0.0,
+            memory_usage: 0,
+            state: ApplicationState::Enabled,
+            connection_status: ConnectionStatus::Connected,
+            connection: None,
+        };
+        map.insert(uuid, sample.clone());
+
+        let tmpdir = tempdir().unwrap();
+        let filepath = tmpdir.path().join(Application::FILE_EXTENSION);
+        let json = to_string_pretty(&map).unwrap();
+        fs::File::create(&filepath)
+            .and_then(|mut f| f.write_all(json.as_bytes()))
+            .unwrap();
+
+        let loaded = Application::load_all(tmpdir.path().to_string_lossy().into())
+            .await
+            .unwrap();
+        let got = loaded.get(&uuid).unwrap();
+        assert_eq!(got.title(), "X");
+        assert_eq!(got.state(), ApplicationState::Enabled);
+        assert_eq!(got._connection_status(), &ConnectionStatus::Connected);
     }
 }
