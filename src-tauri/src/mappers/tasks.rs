@@ -2,6 +2,7 @@
 
 use super::{read_field_value_string, read_field_value_u64};
 use crate::domain::{Task, TaskState};
+use crate::warnings::TaskWarnings;
 use console_api::tasks;
 use console_api::tasks::task::Kind;
 use uuid::Uuid;
@@ -46,5 +47,13 @@ pub fn map_to_domain_task(_app_id: Uuid, task: &tasks::Task) -> Option<Task> {
         busy: None,
         location,
         created_at: None,
+        wakes: 0,
+        self_wakes: 0,
+        waker_clones: 0,
+        waker_drops: 0,
+        polls: 0,
+        last_poll_started: None,
+        last_poll_ended: None,
+        warnings: TaskWarnings::new(),
     })
 }

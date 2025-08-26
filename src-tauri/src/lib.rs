@@ -5,6 +5,7 @@ mod error;
 mod infra;
 mod mappers;
 mod state_manager;
+mod warnings;
 
 use state_manager::StateManager;
 use std::{sync::Arc, time::Duration};

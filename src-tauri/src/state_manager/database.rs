@@ -25,7 +25,10 @@ use crate::{
 };
 use async_trait::async_trait;
 use log::{debug, error};
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
@@ -44,6 +47,8 @@ pub(crate) struct Database {
 
     /// All persisted tasks, keyed by their string ID.
     tasks: RwLock<HashMap<String, Arc<Task>>>,
+
+    active_tasks: RwLock<HashSet<String>>,
 
     /// All persisted resources, keyed by their string ID.
     resources: RwLock<HashMap<String, Arc<Resource>>>,
@@ -70,6 +75,7 @@ impl Database {
             storage_folder,
             applications: RwLock::new(HashMap::new()),
             tasks: RwLock::new(HashMap::new()),
+            active_tasks: RwLock::new(HashSet::new()),
             resources: RwLock::new(HashMap::new()),
             polls: RwLock::new(Vec::new()),
             async_ops: RwLock::new(HashMap::new()),
@@ -130,6 +136,14 @@ impl Database {
             "Successfully loaded {} tasks from disk.",
             tasks.values().len()
         );
+
+        let mut active_tasks = HashSet::new();
+
+        for (key, task) in tasks.clone() {
+            if !task.is_completed() {
+                active_tasks.insert(key);
+            }
+        }
 
         //Load all resources
         let resources: HashMap<String, Arc<Resource>> =
@@ -214,6 +228,7 @@ impl Database {
             storage_folder,
             applications: RwLock::new(applications),
             tasks: RwLock::new(tasks),
+            active_tasks: RwLock::new(active_tasks),
             resources: RwLock::new(resources),
             polls: RwLock::new(polls),
             async_ops: RwLock::new(async_ops),
@@ -256,6 +271,14 @@ impl Storage for Database {
             title: "tasks",
             elements,
         }
+    }
+
+    async fn active_tasks_write(&self) -> tokio::sync::RwLockWriteGuard<'_, HashSet<String>> {
+        self.active_tasks.write().await
+    }
+
+    async fn active_tasks_read(&self) -> HashSet<String> {
+        self.active_tasks.read().await.clone()
     }
 
     /// Read-only snapshot of all resources.

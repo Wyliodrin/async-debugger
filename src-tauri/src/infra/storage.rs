@@ -9,7 +9,10 @@ use crate::domain::{
     Task,
 };
 use async_trait::async_trait;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 use uuid::Uuid;
 
 /// Abstraction over a persisted store for all domain entities.
@@ -29,6 +32,10 @@ pub(crate) trait Storage: Send + Sync {
 
     /// Write guard for tasks.
     async fn tasks_write(&self) -> WriteableDataBaseGuard<'_, HashMap<String, Arc<Task>>>;
+
+    async fn active_tasks_write(&self) -> tokio::sync::RwLockWriteGuard<'_, HashSet<String>>;
+
+    async fn active_tasks_read(&self) -> HashSet<String>;
 
     /// Read all resources.
     async fn resources_read(&self) -> HashMap<String, Arc<Resource>>;

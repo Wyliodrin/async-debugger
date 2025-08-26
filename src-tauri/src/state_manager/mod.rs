@@ -105,9 +105,10 @@ impl StateManager {
             Some((app_id, event)) = updates_receiver.recv() => {
                 match event {
                     Event::Update(update) => {
+                        let mut warnings = Vec::new();
                         let task_future = async {
                             if let Some(task_update) = update.task_update {
-                                self.state.handle_task_update(app_id, task_update).await;
+                                warnings.extend(self.state.handle_task_update(app_id, task_update).await);
                             }
                         };
 
@@ -153,6 +154,7 @@ impl StateManager {
                         };
 
                         tokio::join!(task_future, resource_future, async_op_future);
+                        println!("{:?}", warnings);
                     },
 
                     Event::ApplicationUpdated(update) => {

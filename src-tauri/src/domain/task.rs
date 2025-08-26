@@ -5,10 +5,12 @@ use super::storable::Storable;
 use crate::domain::{duration::Duration, has_app_name::HasAppName};
 use crate::error::Error as TraceError;
 use crate::mappers::read_file;
+use crate::warnings::TaskWarnings;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::time::SystemTime;
 
 /// Lifecycle state of a task.
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -53,6 +55,22 @@ pub struct Task {
     pub location: Option<String>,
     /// Optional creation timestamp.
     pub created_at: Option<String>,
+
+    pub wakes: u64,
+
+    pub self_wakes: u64,
+
+    pub waker_clones: u64,
+
+    pub waker_drops: u64,
+
+    pub polls: u64,
+
+    pub last_poll_started: Option<SystemTime>,
+
+    pub last_poll_ended: Option<SystemTime>,
+
+    pub warnings: TaskWarnings,
 }
 
 impl Task {
@@ -63,6 +81,78 @@ impl Task {
     /// Panics if `app_name` is `None`.
     pub fn id(&self) -> String {
         format!("{}.{}", self.app_name.as_ref().unwrap(), self.id)
+    }
+
+    pub(crate) fn wakes(&self) -> u64 {
+        self.wakes
+    }
+
+    pub(crate) fn self_wakes(&self) -> u64 {
+        self.self_wakes
+    }
+    pub(crate) fn waker_clones(&self) -> u64 {
+        self.waker_clones
+    }
+
+    pub(crate) fn waker_drops(&self) -> u64 {
+        self.waker_drops
+    }
+
+    pub(crate) fn total_polls(&self) -> u64 {
+        self.polls
+    }
+
+    pub(crate) fn check_warnings(&self) -> Vec<String> {
+        self.warnings.check(&self)
+    }
+
+    pub(crate) fn is_blocking(&self) -> bool {
+        matches!(self.kind.as_deref(), Some("block_on") | Some("blocking"))
+    }
+
+    pub(crate) fn is_completed(&self) -> bool {
+        matches!(self.state, TaskState::Stopped { at: _, reason: _ })
+    }
+
+    pub(crate) fn waker_count(&self) -> u64 {
+        self.waker_clones().saturating_sub(self.waker_drops())
+    }
+
+    pub(crate) fn self_wake_percent(&self) -> u64 {
+        let total = self.wakes();
+        if total == 0 {
+            0
+        } else {
+            ((self.self_wakes() as f64 / total as f64) * 100.0) as u64
+        }
+    }
+
+    pub(crate) fn busy(&self, since: SystemTime) -> std::time::Duration {
+        if let Some(busy_duration) = self.busy.clone() {
+            let busy_time =
+                std::time::Duration::new(busy_duration.seconds as u64, busy_duration.nanos as u32);
+            if let Some(started) = self.last_poll_started {
+                if self.last_poll_started > self.last_poll_ended {
+                    // in this case the task is being polled at the moment
+                    let current_time_in_poll = since.duration_since(started).unwrap_or_default();
+                    return busy_time + current_time_in_poll;
+                }
+            }
+            busy_time
+        } else {
+            std::time::Duration::new(0, 0)
+        }
+    }
+
+    pub(crate) fn is_running(&self) -> bool {
+        self.last_poll_started > self.last_poll_ended
+    }
+
+    pub(crate) fn is_awakened(&self) -> bool {
+        // Before the first poll, the task is waiting on the executor to run it
+        // for the first time.
+        //self.total_polls() == 0 || self.last_wake() > self.last_poll_started
+        true
     }
 }
 

@@ -4,12 +4,12 @@ use crate::common::{get_pid_hosting_at, rename_database_keys, rename_database_ke
 use crate::domain::application::{ApplicationState, ConnectionStatus};
 use crate::domain::async_op::{CPUOverview, TaskOp, TimeStamp};
 use crate::domain::resource::ResourceStatus;
-use crate::domain::{TaskState, duration::Duration};
+use crate::domain::{duration::Duration, TaskState};
 use crate::error::Error as TraceError;
 use crate::infra::guard::DataBaseWrite;
 use crate::infra::storage::Storage;
 use crate::{
-    domain::{Task, application::Application, poll::Poll, resource::Resource},
+    domain::{application::Application, poll::Poll, resource::Resource, Task},
     mappers::{
         async_ops::map_to_domain_async_op, poll::map_to_domain_poll,
         resources::map_to_domain_resource, tasks::map_to_domain_task,
@@ -258,7 +258,9 @@ impl State {
     /// - Mark tasks as stopped if they have been dropped.
     ///
     /// If the application is currently disabled, updates are ignored.
-    pub async fn handle_task_update(&self, app_id: Uuid, task_update: TaskUpdate) {
+    pub async fn handle_task_update(&self, app_id: Uuid, task_update: TaskUpdate) -> Vec<String> {
+        let mut warnings: Vec<String> = Vec::new();
+
         // debug for missed task_updates
         if task_update.dropped_events > 0 {
             println!("missed task updates: {:?}", task_update.dropped_events);
@@ -267,7 +269,7 @@ impl State {
         if let Some(app) = self.database.applications_read().await.get(&app_id) {
             if app.state() == ApplicationState::Disabled {
                 // If app is disabled we dont save anything
-                return;
+                return Vec::new();
             }
 
             // Insert new tasks
@@ -279,12 +281,20 @@ impl State {
                         app.title(),
                         app_id
                     );
+
+                    {
+                        let mut guard = self.database.active_tasks_write().await;
+                        guard.insert(domain_task.id().clone());
+                    }
+
                     self.database
                         .tasks_write()
                         .await
                         .insert(domain_task.id(), Arc::new(domain_task));
                 }
             }
+
+            let mut active_tasks_clone = self.database.active_tasks_read().await;
 
             // Update existing tasks
             for (tid, updated_task) in task_update.stats_update {
@@ -293,11 +303,17 @@ impl State {
                 if let Some(task_arc) = tasks_guard.get_mut(&key) {
                     let task = Arc::make_mut(task_arc);
 
-                    // Handle busy time
+                    // Handle busy time & poll stats
                     if let Some(poll_stats) = updated_task.poll_stats {
                         if let Some(dur) = poll_stats.busy_time {
                             task.busy = Some(Duration::new(dur.seconds, dur.nanos));
                         }
+
+                        task.last_poll_started =
+                            poll_stats.last_poll_started.map(|v| v.try_into().unwrap());
+                        task.last_poll_ended =
+                            poll_stats.last_poll_ended.map(|v| v.try_into().unwrap());
+                        task.polls = poll_stats.polls;
                     }
 
                     // Handle runtime & stop detection
@@ -308,6 +324,12 @@ impl State {
                                 at: Utc::now(),
                                 reason: None,
                             };
+                            {
+                                let mut active_tasks_guard =
+                                    self.database.active_tasks_write().await;
+                                active_tasks_guard.remove(&task.id());
+                                active_tasks_clone.remove(&task.id());
+                            }
                             if let Some(created_at) = updated_task.created_at {
                                 task.runtime = {
                                     let mut seconds = dropped_at.seconds - created_at.seconds;
@@ -400,8 +422,26 @@ impl State {
                         );
                         task.created_at = Some(pretty);
                     }
+
+                    task.wakes = updated_task.wakes;
+                    task.self_wakes = updated_task.self_wakes;
+                    task.waker_clones = updated_task.waker_clones;
+                    task.waker_drops = updated_task.waker_drops;
+
+                    //check for warnings
+                    warnings.extend(task.check_warnings());
+                    active_tasks_clone.remove(&task.id());
                 }
             }
+            let tasks = self.database.tasks_read().await;
+            for id in active_tasks_clone {
+                if let Some(task) = tasks.get(&id) {
+                    warnings.extend(task.check_warnings());
+                }
+            }
+            warnings
+        } else {
+            return Vec::new();
         }
     }
 
