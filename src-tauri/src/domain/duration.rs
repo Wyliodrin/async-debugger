@@ -19,14 +19,6 @@ impl Duration {
     ///
     /// The `formatted` field is computed automatically via
     /// [`get_correct_subdivision_sec`].
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use your_crate::domain::durations::Duration;
-    /// let d = Duration::new(1, 1_500_000);
-    /// assert_eq!(d.formatted, "2ms");
-    /// ```
     pub fn new(seconds: i64, nanos: i32) -> Self {
         let formatted = Self::get_formatted_duration(seconds, nanos);
         Self {
@@ -56,19 +48,6 @@ impl Duration {
     /// # Returns
     ///
     /// A `String` representing the duration in a human-readable format.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use your_crate::domain::durations::Duration;
-    ///
-    /// assert_eq!(Duration::get_formatted_duration(0, 2_500_000), "3ms");
-    /// assert_eq!(Duration::get_formatted_duration(0, 2_500), "3μs");
-    /// assert_eq!(Duration::get_formatted_duration(0, 250), "250ns");
-    /// assert_eq!(Duration::get_formatted_duration(75, 1_200_000), "1min 15s");
-    /// assert_eq!(Duration::get_formatted_duration(3_780, 500_000), "1h 3min");
-    /// assert_eq!(Duration::get_formatted_duration(2, 1_500_000), "2s 2ms");
-    /// ```
     pub fn get_formatted_duration(seconds: i64, nanos: i32) -> String {
         if seconds > 3_600 {
             let hours = ((seconds as f64) / 3_600.0).floor() as i64;
@@ -98,5 +77,59 @@ impl Duration {
         } else {
             return sub_seconds_format;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Duration;
+
+    #[test]
+    fn formatted_subsecond_ns() {
+        // < 1_000 ns
+        assert_eq!(Duration::get_formatted_duration(0, 250), "250ns");
+    }
+
+    #[test]
+    fn formatted_subsecond_us() {
+        // ≥ 1_000 ns and < 1_000_000 ns
+        assert_eq!(Duration::get_formatted_duration(0, 2_500), "3μs"); // 2.5μs → 3μs
+        assert_eq!(Duration::get_formatted_duration(0, 1_000), "1μs");
+    }
+
+    #[test]
+    fn formatted_subsecond_ms() {
+        // ≥ 1_000_000 ns
+        assert_eq!(Duration::get_formatted_duration(0, 2_500_000), "3ms"); // 2.5ms → 3ms
+        assert_eq!(Duration::get_formatted_duration(0, 1_000_000), "1ms");
+    }
+
+    #[test]
+    fn formatted_seconds_and_subseconds() {
+        // seconds > 0, < 60
+        assert_eq!(Duration::get_formatted_duration(2, 1_500_000), "2s 2ms"); // 1.5ms → 2ms
+        assert_eq!(Duration::get_formatted_duration(5, 250), "5s 250ns");
+    }
+
+    #[test]
+    fn formatted_minutes_and_seconds() {
+        // seconds ≥ 60, < 3600
+        assert_eq!(Duration::get_formatted_duration(75, 1_200_000), "1min 15s"); // 75s → 1min 15s
+        assert_eq!(Duration::get_formatted_duration(120, 0), "2min 0s"); // exact
+    }
+
+    #[test]
+    fn formatted_hours_and_minutes() {
+        // seconds > 3600
+        assert_eq!(Duration::get_formatted_duration(3_780, 500_000), "1h 3min"); // 3780s = 1h 3min
+        assert_eq!(Duration::get_formatted_duration(7_200, 0), "2h 0min"); // exact 2 ore
+    }
+
+    #[test]
+    fn new_constructs_with_formatted() {
+        let d = Duration::new(1, 1_500_000);
+        assert_eq!(d.seconds, 1);
+        assert_eq!(d.nanos, 1_500_000);
+        assert_eq!(d.formatted, "1s 2ms"); // 1_500_000 ns → 2ms
     }
 }

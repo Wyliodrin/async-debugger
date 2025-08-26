@@ -29,7 +29,7 @@ use tonic::{transport::Endpoint, Streaming};
 use uuid::Uuid;
 
 /// Commands you can send to an active connection task.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Command {
     /// Instructs the connection task to disconnect and shut down.
     Disconnect,
