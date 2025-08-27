@@ -55,7 +55,18 @@ pub struct Task {
     pub location: Option<String>,
     /// Optional creation timestamp.
     pub created_at: Option<String>,
+    /// The size of the future driving the task
+    pub size_bytes: Option<usize>,
+    /// The original size of the future (before runtime auto-boxing)
+    pub original_size_bytes: Option<usize>,
 
+    pub stats: TaskStats,
+
+    pub warnings: TaskWarnings,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TaskStats {
     pub wakes: u64,
 
     pub self_wakes: u64,
@@ -69,8 +80,6 @@ pub struct Task {
     pub last_poll_started: Option<SystemTime>,
 
     pub last_poll_ended: Option<SystemTime>,
-
-    pub warnings: TaskWarnings,
 }
 
 impl Task {
@@ -84,22 +93,30 @@ impl Task {
     }
 
     pub(crate) fn wakes(&self) -> u64 {
-        self.wakes
+        self.stats.wakes
     }
 
     pub(crate) fn self_wakes(&self) -> u64 {
-        self.self_wakes
+        self.stats.self_wakes
     }
     pub(crate) fn waker_clones(&self) -> u64 {
-        self.waker_clones
+        self.stats.waker_clones
     }
 
     pub(crate) fn waker_drops(&self) -> u64 {
-        self.waker_drops
+        self.stats.waker_drops
     }
 
     pub(crate) fn total_polls(&self) -> u64 {
-        self.polls
+        self.stats.polls
+    }
+
+    pub(crate) fn size_bytes(&self) -> Option<usize> {
+        self.size_bytes
+    }
+
+    pub(crate) fn original_size_bytes(&self) -> Option<usize> {
+        self.original_size_bytes
     }
 
     pub(crate) fn check_warnings(&self) -> Vec<String> {
@@ -131,8 +148,8 @@ impl Task {
         if let Some(busy_duration) = self.busy.clone() {
             let busy_time =
                 std::time::Duration::new(busy_duration.seconds as u64, busy_duration.nanos as u32);
-            if let Some(started) = self.last_poll_started {
-                if self.last_poll_started > self.last_poll_ended {
+            if let Some(started) = self.stats.last_poll_started {
+                if self.stats.last_poll_started > self.stats.last_poll_ended {
                     // in this case the task is being polled at the moment
                     let current_time_in_poll = since.duration_since(started).unwrap_or_default();
                     return busy_time + current_time_in_poll;
@@ -145,13 +162,13 @@ impl Task {
     }
 
     pub(crate) fn is_running(&self) -> bool {
-        self.last_poll_started > self.last_poll_ended
+        self.stats.last_poll_started > self.stats.last_poll_ended
     }
 
     pub(crate) fn is_awakened(&self) -> bool {
         // Before the first poll, the task is waiting on the executor to run it
         // for the first time.
-        //self.total_polls() == 0 || self.last_wake() > self.last_poll_started
+        //self.total_polls() == 0 || self.stats.last_wake() > self.stats.last_poll_started
         true
     }
 }

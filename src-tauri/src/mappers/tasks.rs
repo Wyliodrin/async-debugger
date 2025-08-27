@@ -1,7 +1,7 @@
 //! Convert from `console_api::tasks::Task` to our domain `Task`.
 
-use super::{read_field_value_string, read_field_value_u64};
-use crate::domain::{Task, TaskState};
+use super::{read_field_value_string, read_field_value_u64, read_field_value_usize};
+use crate::domain::{Task, TaskState, TaskStats};
 use crate::warnings::TaskWarnings;
 use console_api::tasks;
 use console_api::tasks::task::Kind;
@@ -12,6 +12,8 @@ use uuid::Uuid;
 pub fn map_to_domain_task(_app_id: Uuid, task: &tasks::Task) -> Option<Task> {
     let id = task.id.as_ref().map(|v| v.id)?;
     let tid = read_field_value_u64(task, "task.id");
+    let size_bytes = read_field_value_usize(task, "size.bytes");
+    let original_size_bytes = read_field_value_usize(task, "original_size.bytes");
     let name = read_field_value_string(task, "task.name").map(|s| s.to_owned());
     let kind = Kind::try_from(task.kind)
         .map(|k| k.as_str_name().to_owned())
@@ -33,6 +35,16 @@ pub fn map_to_domain_task(_app_id: Uuid, task: &tasks::Task) -> Option<Task> {
         )
     });
 
+    let stats = TaskStats {
+        wakes: 0,
+        self_wakes: 0,
+        waker_clones: 0,
+        waker_drops: 0,
+        polls: 0,
+        last_poll_started: None,
+        last_poll_ended: None,
+    };
+
     Some(Task {
         app_name: None,
         id,
@@ -47,13 +59,9 @@ pub fn map_to_domain_task(_app_id: Uuid, task: &tasks::Task) -> Option<Task> {
         busy: None,
         location,
         created_at: None,
-        wakes: 0,
-        self_wakes: 0,
-        waker_clones: 0,
-        waker_drops: 0,
-        polls: 0,
-        last_poll_started: None,
-        last_poll_ended: None,
+        size_bytes,
+        original_size_bytes,
+        stats,
         warnings: TaskWarnings::new(),
     })
 }

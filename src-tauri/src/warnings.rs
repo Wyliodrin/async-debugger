@@ -54,6 +54,8 @@ pub struct TaskWarnings {
     self_wake_percent: SelfWakePercent,
     lost_waker: LostWaker,
     never_yielded: NeverYielded,
+    auto_boxed_feature: AutoBoxedFuture,
+    large_feature: LargeFuture,
 }
 
 impl TaskWarnings {
@@ -61,11 +63,15 @@ impl TaskWarnings {
         let self_wake_percent = SelfWakePercent::default();
         let lost_waker = LostWaker::new();
         let never_yielded = NeverYielded::default();
+        let auto_boxed_feature = AutoBoxedFuture::new();
+        let large_feature = LargeFuture::default();
 
         Self {
             self_wake_percent,
             lost_waker,
             never_yielded,
+            auto_boxed_feature,
+            large_feature,
         }
     }
 
@@ -268,9 +274,9 @@ impl Warn<Task> for NeverYielded {
         // Avoid short-lived task false positives
         if task.busy(SystemTime::now()) >= self.min_duration {
             return Warning::Warn;
-        } else {
-            return Warning::Ok;
         }
+
+        return Warning::Ok;
     }
 
     fn format(&self, task: &Task) -> String {
@@ -284,6 +290,127 @@ impl Warn<Task> for NeverYielded {
         format!(
             "Task {task_name} has never yielded ({:?})",
             task.busy(SystemTime::now()),
+        )
+    }
+}
+
+/// Warning for if a task's driving future was auto-boxed by the runtime
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub(crate) struct AutoBoxedFuture {
+    enabled: bool,
+}
+
+impl AutoBoxedFuture {
+    fn new() -> Self {
+        Self { enabled: true }
+    }
+}
+
+impl Warn<Task> for AutoBoxedFuture {
+    fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    fn summary(&self) -> &str {
+        "tasks have been boxed by the runtime due to their size"
+    }
+
+    fn check(&self, task: &Task) -> Warning {
+        let (Some(size_bytes), Some(original_size_bytes)) =
+            (task.size_bytes(), task.original_size_bytes())
+        else {
+            return Warning::Ok;
+        };
+
+        if original_size_bytes != size_bytes {
+            Warning::Warn
+        } else {
+            Warning::Ok
+        }
+    }
+
+    fn format(&self, task: &Task) -> String {
+        let original_size = task
+            .original_size_bytes()
+            .expect("warning should not trigger if original size is None");
+        let boxed_size = task
+            .size_bytes()
+            .expect("warning should not trigger if size is None");
+        let option_task_name = task.name.clone();
+        let task_name;
+        if let Some(name) = option_task_name {
+            task_name = name
+        } else {
+            task_name = task.id()
+        }
+        format!(
+            "Task {task_name}'s future was auto-boxed by the runtime when spawning, due to its size (originally \
+            {original_size} bytes, boxed size {boxed_size} bytes)",
+
+        )
+    }
+}
+
+/// Warning for if a task's driving future if large
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct LargeFuture {
+    enabled: bool,
+    min_size: usize,
+    description: String,
+}
+impl LargeFuture {
+    pub(crate) const DEFAULT_MIN_SIZE_BYTES: usize = 1024;
+    pub(crate) fn new(min_size: usize) -> Self {
+        Self {
+            enabled: true,
+            min_size,
+            description: format!("tasks are {} bytes or larger", min_size),
+        }
+    }
+}
+
+impl Default for LargeFuture {
+    fn default() -> Self {
+        Self::new(Self::DEFAULT_MIN_SIZE_BYTES)
+    }
+}
+
+impl Warn<Task> for LargeFuture {
+    fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    fn summary(&self) -> &str {
+        self.description.as_str()
+    }
+
+    fn check(&self, task: &Task) -> Warning {
+        // Don't fire warning for tasks that are not async
+        if task.is_blocking() {
+            return Warning::Ok;
+        }
+
+        if let Some(size_bytes) = task.size_bytes() {
+            if size_bytes >= self.min_size {
+                return Warning::Warn;
+            }
+        }
+        Warning::Ok
+    }
+
+    fn format(&self, task: &Task) -> String {
+        let option_task_name = task.name.clone();
+        let task_name;
+        if let Some(name) = option_task_name {
+            task_name = name
+        } else {
+            task_name = task.id()
+        }
+        format!(
+            "Task {} occupies a large amount of stack space ({} bytes)",
+            task_name,
+            task.size_bytes()
+                .expect("warning should not trigger if size is None"),
         )
     }
 }

@@ -309,11 +309,11 @@ impl State {
                             task.busy = Some(Duration::new(dur.seconds, dur.nanos));
                         }
 
-                        task.last_poll_started =
+                        task.stats.last_poll_started =
                             poll_stats.last_poll_started.map(|v| v.try_into().unwrap());
-                        task.last_poll_ended =
+                        task.stats.last_poll_ended =
                             poll_stats.last_poll_ended.map(|v| v.try_into().unwrap());
-                        task.polls = poll_stats.polls;
+                        task.stats.polls = poll_stats.polls;
                     }
 
                     // Handle runtime & stop detection
@@ -423,10 +423,10 @@ impl State {
                         task.created_at = Some(pretty);
                     }
 
-                    task.wakes = updated_task.wakes;
-                    task.self_wakes = updated_task.self_wakes;
-                    task.waker_clones = updated_task.waker_clones;
-                    task.waker_drops = updated_task.waker_drops;
+                    task.stats.wakes = updated_task.wakes;
+                    task.stats.self_wakes = updated_task.self_wakes;
+                    task.stats.waker_clones = updated_task.waker_clones;
+                    task.stats.waker_drops = updated_task.waker_drops;
 
                     //check for warnings
                     warnings.extend(task.check_warnings());

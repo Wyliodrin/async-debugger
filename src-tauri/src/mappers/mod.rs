@@ -38,6 +38,17 @@ fn read_field_value_u64(task: &ConsoleTask, field_name: impl AsRef<str>) -> Opti
     }
 }
 
+fn read_field_value_usize(task: &ConsoleTask, field_name: impl AsRef<str>) -> Option<usize> {
+    if let Some(field) = find_field(task, field_name) {
+        match field.value {
+            Some(Value::U64Val(value)) => Some(value as usize),
+            _ => None,
+        }
+    } else {
+        None
+    }
+}
+
 /// Read a string value from a named field in a task.
 fn read_field_value_string(task: &ConsoleTask, field_name: impl AsRef<str>) -> Option<&str> {
     if let Some(field) = find_field(task, field_name) {
