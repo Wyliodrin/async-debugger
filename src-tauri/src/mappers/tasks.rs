@@ -41,6 +41,7 @@ pub fn map_to_domain_task(_app_id: Uuid, task: &tasks::Task) -> Option<Task> {
         waker_clones: 0,
         waker_drops: 0,
         polls: 0,
+        last_wake: None,
         last_poll_started: None,
         last_poll_ended: None,
     };

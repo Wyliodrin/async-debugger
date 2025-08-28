@@ -318,7 +318,7 @@ impl State {
 
                     // Handle runtime & stop detection
                     if let Some(dropped_at) = updated_task.dropped_at {
-                        if matches!(task.state, TaskState::Running) {
+                        if !matches!(task.state, TaskState::Stopped {at: _, reason: _}) {
                             info!("Marking task {} as Stopped", key);
                             task.state = TaskState::Stopped {
                                 at: Utc::now(),
@@ -423,10 +423,17 @@ impl State {
                         task.created_at = Some(pretty);
                     }
 
+                    task.stats.last_wake = updated_task.last_wake.map(|v| v.try_into().unwrap());
                     task.stats.wakes = updated_task.wakes;
                     task.stats.self_wakes = updated_task.self_wakes;
                     task.stats.waker_clones = updated_task.waker_clones;
                     task.stats.waker_drops = updated_task.waker_drops;
+
+                    if task.is_starved() {
+                        task.state = TaskState::Starved;
+                    } else {
+                        task.state = TaskState::Running;
+                    }
 
                     //check for warnings
                     warnings.extend(task.check_warnings());

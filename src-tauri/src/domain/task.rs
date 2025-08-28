@@ -24,6 +24,7 @@ pub enum TaskState {
         /// Optional human‐readable explanation.
         reason: Option<String>,
     },
+    Starved
 }
 
 /// A traced task with timing and scheduling information.
@@ -76,6 +77,8 @@ pub struct TaskStats {
     pub waker_drops: u64,
 
     pub polls: u64,
+
+    pub last_wake: Option<SystemTime>,
 
     pub last_poll_started: Option<SystemTime>,
 
@@ -170,6 +173,10 @@ impl Task {
         // for the first time.
         //self.total_polls() == 0 || self.stats.last_wake() > self.stats.last_poll_started
         true
+    }
+
+    pub(crate) fn is_starved(&self) -> bool {
+        self.stats.last_wake > self.stats.last_poll_started
     }
 }
 
