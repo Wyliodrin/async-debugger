@@ -46,5 +46,9 @@ pub fn map_to_domain_task(_app_id: Uuid, task: &tasks::Task) -> Option<Task> {
         busy: None,
         location,
         created_at: None,
+        scheduled_at: None,
+        woken_at: None,
+        starved: None,
+        starved_since_ms: None,
     })
 }

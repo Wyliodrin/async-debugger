@@ -43,6 +43,7 @@ const taskHeaders = ref<DataTableHeader[]>([
   { title: 'Idle',          key: 'idle',           align: 'center'},
   { title: 'Busy',          key: 'busy',           align: 'center'},
   { title: 'Location',      key: 'location',       align: 'center'},
+  { title: 'Starved',       key: 'starved',        align: 'center'},
 ])
 
 function getTaskChipColor(stateOrKind: string) {
@@ -53,6 +54,10 @@ function getTaskChipColor(stateOrKind: string) {
     case 'BLOCKING':  return 'orange'
     default:          return 'grey'
   }
+}
+
+function rowClass(item: Task) {
+  return item.starved ? 'starved-row' : '';
 }
 
 const editedItem: Ref<{
@@ -181,9 +186,10 @@ listen<any[]>('update:tasks', e => {
       </div>
 
       <v-data-table
-        :headers="taskHeaders"
-        :items="filteredTasks"
-        :item-value="item => `${item.app_name}-${item.id}-${item.tid}`"
+          :headers="taskHeaders"
+          :items="filteredTasks"
+          :item-value="item => `${item.app_name}-${item.id}-${item.tid}`"
+          :item-class="rowClass"
       >
         <template #item.kind="{ item }">
           <v-chip
@@ -212,6 +218,16 @@ listen<any[]>('update:tasks', e => {
           <span v-html="item.location"></span>
         </template>
 
+        <template #item.starved="{ item }">
+          <v-chip
+              :color="item.starved ? 'red' : 'grey'"
+              size="small"
+          >
+            {{ item.starved === true ? `${Math.floor((item.starved_since_ms || 0) / 1000)}s` : 'Not Starved' }}
+          </v-chip>
+        </template>
+
+
         <template #item.name="{ item }">
           <v-chip
               :color="item.color ? item.color : 'gray'"
@@ -234,5 +250,8 @@ listen<any[]>('update:tasks', e => {
 <style scoped>
 .search-container {
   width: 400px;
+}
+.starved-row {
+  background-color: rgba(255, 0, 0, 0.06);
 }
 </style>

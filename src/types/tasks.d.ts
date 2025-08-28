@@ -12,4 +12,8 @@ export type Task = {
     busy: string,
     location: string,
     created_at: string,
+    starved: boolean,
+    starved_since_ms: number,
+    woken_at: string,
+    scheduled_at: string,
 };

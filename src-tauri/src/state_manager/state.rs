@@ -297,6 +297,7 @@ impl State {
                     if let Some(poll_stats) = updated_task.poll_stats {
                         if let Some(dur) = poll_stats.busy_time {
                             task.busy = Some(Duration::new(dur.seconds, dur.nanos));
+                            task.woken_at = Some(Utc::now());
                         }
                     }
 
@@ -345,7 +346,9 @@ impl State {
 
                     // Handle scheduled time
                     if let Some(scheduled) = updated_task.scheduled_time {
-                        task.scheduled = Some(Duration::new(scheduled.seconds, scheduled.nanos))
+                        task.scheduled = Some(Duration::new(scheduled.seconds, scheduled.nanos));
+                        let now = Utc::now();
+                        task.scheduled_at = Some(now);
                     }
 
                     // Compute idle time
@@ -400,6 +403,7 @@ impl State {
                         );
                         task.created_at = Some(pretty);
                     }
+                    task.compute_starvation(200);
                 }
             }
         }
