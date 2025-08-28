@@ -147,11 +147,12 @@ async function save() {
 }
 
 function editTask(task: Task) {
-  const {id, name, app_name} = task;
+  const {id, name, app_name, warnings} = task;
 
   editedItem.value.id = id;
   editedItem.value.app_name = app_name;
   editedItem.value.name = name;
+  editedItem.value.warnings = warnings;
 
   dialog.value = true;
 
@@ -218,7 +219,7 @@ listen<any[]>('update:tasks', e => {
                                   <v-col cols="8" class="d-flex justify-end align-center">
                                     <v-text-field
                                       v-if="warning.parameter !== undefined"
-                                      v-model="warning.parameter"
+                                      v-model.number="warning.parameter"
                                       label="Parameter"
                                       type="number"
                                       hide-details

@@ -288,6 +288,13 @@ impl State {
                         guard.insert(domain_task.id().clone());
                     }
 
+                    {
+                        let tasks = self.database.tasks_read().await;
+                        if let Some(task) = tasks.get(&format!("{}", domain_task.id())) {
+                            domain_task.warnings = task.warnings.clone();
+                        }
+                    }
+
                     self.database
                         .tasks_write()
                         .await
@@ -494,7 +501,7 @@ impl State {
                     for (key, task_arc) in tasks_guard.iter_mut() {
                         if key.starts_with(&prefix) {
                             let t = Arc::make_mut(task_arc);
-                            if matches!(t.state, TaskState::Running) {
+                            if !matches!(t.state, TaskState::Stopped { at: _, reason: _ }) {
                                 t.state = TaskState::Stopped {
                                     at: Utc::now(),
                                     reason: None,
@@ -560,7 +567,7 @@ impl State {
         let mut tasks = self.database.tasks_write().await;
         if let Some(task_arc) = tasks.get_mut(task_id) {
             let task = Arc::make_mut(task_arc);
-            if matches!(task.state, TaskState::Running) {
+            if !matches!(task.state, TaskState::Stopped { at: _, reason: _ }) {
                 task.state = TaskState::Stopped {
                     at: Utc::now(),
                     reason: None,
