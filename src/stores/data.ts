@@ -1,5 +1,5 @@
 import { Resource } from "@/types/resources";
-import { Task } from "@/types/tasks";
+import { Task, TaskWarnings } from "@/types/tasks";
 import { Poll } from "@/types/polls";
 import { defineStore } from "pinia";
 import { ref } from "vue";
@@ -41,10 +41,10 @@ export const useDataStore = defineStore('data', () => {
         }
     }
 
-    async function editTask(task_id: number, task_name: string, task_color:string, app_name: string) {
-        await invoke('edit_task', {taskId: task_id, taskName: task_name, taskColor: task_color, appName: app_name}).then(
+    async function editTask(task_id: number, task_name: string, task_color:string, app_name: string, warnings: TaskWarnings) {
+        await invoke('edit_task', {taskId: task_id, taskName: task_name, taskColor: task_color, appName: app_name, warnings: warnings}).then(
             () => {
-                console.log("numele task-ului modificat cu succes");
+                console.log("task-ul a fost modificat cu succes");
             }
         ).catch(
             (error) => {

@@ -106,19 +106,19 @@ impl TaskWarnings {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct SelfWakePercent {
     enabled: bool,
-    min_percent: u64,
+    parameter: u64,
     description: String,
 }
 
 impl SelfWakePercent {
     pub(crate) const DEFAULT_PERCENT: u64 = 50;
-    pub(crate) fn new(min_percent: u64) -> Self {
+    pub(crate) fn new(parameter: u64) -> Self {
         Self {
             enabled: true,
-            min_percent,
+            parameter,
             description: format!(
                 "tasks have woken themselves over {}% of the time",
-                min_percent
+                parameter
             ),
         }
     }
@@ -144,7 +144,7 @@ impl Warn<Task> for SelfWakePercent {
             return Warning::Ok;
         }
         let self_wakes = task.self_wake_percent();
-        if self_wakes > self.min_percent {
+        if self_wakes > self.parameter {
             Warning::Warn
         } else {
             Warning::Ok
@@ -167,7 +167,7 @@ impl Warn<Task> for SelfWakePercent {
         }
         format!(
             "Task {task_name} has woken itself for more than {}% of its total wakeups ({}%)",
-            self.min_percent, self_wakes
+            self.parameter, self_wakes
         )
     }
 }
@@ -224,20 +224,17 @@ impl Warn<Task> for LostWaker {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct NeverYielded {
     enabled: bool,
-    min_duration: Duration,
+    parameter: u64,
     description: String,
 }
 
 impl NeverYielded {
-    pub(crate) const DEFAULT_DURATION: Duration = Duration::from_secs(1);
-    pub(crate) fn new(min_duration: Duration) -> Self {
+    pub(crate) const DEFAULT_DURATION: u64 = 1000;
+    pub(crate) fn new(parameter: u64) -> Self {
         Self {
             enabled: true,
-            min_duration,
-            description: format!(
-                "tasks have never yielded (threshold {}ms)",
-                min_duration.as_millis()
-            ),
+            parameter,
+            description: format!("tasks have never yielded (threshold {}ms)", parameter),
         }
     }
 }
@@ -272,7 +269,7 @@ impl Warn<Task> for NeverYielded {
         }
 
         // Avoid short-lived task false positives
-        if task.busy(SystemTime::now()) >= self.min_duration {
+        if task.busy(SystemTime::now()) >= Duration::from_millis(self.parameter) {
             return Warning::Warn;
         }
 
@@ -355,16 +352,16 @@ impl Warn<Task> for AutoBoxedFuture {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct LargeFuture {
     enabled: bool,
-    min_size: usize,
+    parameter: usize,
     description: String,
 }
 impl LargeFuture {
     pub(crate) const DEFAULT_MIN_SIZE_BYTES: usize = 1024;
-    pub(crate) fn new(min_size: usize) -> Self {
+    pub(crate) fn new(parameter: usize) -> Self {
         Self {
             enabled: true,
-            min_size,
-            description: format!("tasks are {} bytes or larger", min_size),
+            parameter,
+            description: format!("tasks are {} bytes or larger", parameter),
         }
     }
 }
@@ -391,7 +388,7 @@ impl Warn<Task> for LargeFuture {
         }
 
         if let Some(size_bytes) = task.size_bytes() {
-            if size_bytes >= self.min_size {
+            if size_bytes >= self.parameter {
                 return Warning::Warn;
             }
         }

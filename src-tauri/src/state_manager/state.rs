@@ -8,6 +8,7 @@ use crate::domain::{duration::Duration, TaskState};
 use crate::error::Error as TraceError;
 use crate::infra::guard::DataBaseWrite;
 use crate::infra::storage::Storage;
+use crate::warnings::TaskWarnings;
 use crate::{
     domain::{application::Application, poll::Poll, resource::Resource, Task},
     mappers::{
@@ -318,7 +319,7 @@ impl State {
 
                     // Handle runtime & stop detection
                     if let Some(dropped_at) = updated_task.dropped_at {
-                        if matches!(task.state, TaskState::Running) {
+                        if !matches!(task.state, TaskState::Stopped { at: _, reason: _ }) {
                             info!("Marking task {} as Stopped", key);
                             task.state = TaskState::Stopped {
                                 at: Utc::now(),
@@ -576,40 +577,48 @@ impl State {
     ///    and update each poll’s `task_name` and `task_color`.
     /// 3. If there is an entry in the task‐operations store matching
     ///    the same key, update its `task_name` and `task_color` as well.
-    pub async fn rename_task(
+    pub async fn edit_state_task(
         &self,
         task_id: u64,
         task_name: String,
         task_color: String,
         app_name: String,
+        warnings: TaskWarnings,
     ) {
         let key = format!("{}.{}", app_name, task_id);
 
         // Update the task record itself
         let mut tasks = self.database.tasks_write().await;
+        let mut old_name = None;
+        let mut old_color = None;
         if let Some(task_arc) = tasks.get_mut(&key) {
             let task = Arc::make_mut(task_arc);
+            old_name = task.name.clone();
+            old_color = task.color.clone();
             task.name = Some(task_name.clone());
             task.color = Some(task_color.clone());
+            task.warnings = warnings;
         }
 
-        // Update all polls associated with this task
-        let mut polls = self.database.polls_write().await;
-        polls
-            .iter_mut()
-            .filter(|poll| poll.task_id == Some(task_id))
-            .for_each(|poll_arc| {
-                let mut updated_poll = (**poll_arc).clone();
-                updated_poll.task_name = Some(task_name.clone());
-                updated_poll.task_color = Some(task_color.clone());
-                *poll_arc = Arc::new(updated_poll);
-            });
+        if (old_name != Some(task_name.clone())) || (old_color != Some(task_color.clone())) {
+            // Update all polls associated with this task
+            let mut polls = self.database.polls_write().await;
+            polls
+                .iter_mut()
+                .filter(|poll| poll.task_id == Some(task_id))
+                .for_each(|poll_arc| {
+                    let mut updated_poll = (**poll_arc).clone();
+                    updated_poll.task_name = Some(task_name.clone());
+                    updated_poll.task_color = Some(task_color.clone());
+                    *poll_arc = Arc::new(updated_poll);
+                });
 
-        // Update any task-operation entries
-        if let Some(task_op_arc) = self.database.tasks_ops_write().await.get_mut(&key) {
-            let task_op = Arc::make_mut(task_op_arc);
-            task_op.task_name = Some(task_name.clone());
-            task_op.task_color = Some(task_color.clone());
+            // Update any task-operation entries
+            if let Some(task_op_arc) = self.database.tasks_ops_write().await.get_mut(&key) {
+                let task_op = Arc::make_mut(task_op_arc);
+                task_op.task_name = Some(task_name.clone());
+                task_op.task_color = Some(task_color.clone());
+            }
         }
     }
 
