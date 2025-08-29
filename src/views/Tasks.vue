@@ -63,75 +63,75 @@ function getTaskChipColor(stateOrKind: string) {
 }
 
 const editedItem: Ref<{
-    app_name: string,
-    id: any;
-    name: any;
-    color: string,
-    warnings: TaskWarnings
+  app_name: string,
+  id: any;
+  name: any;
+  color: string,
+  warnings: TaskWarnings
 }> = ref({
-    app_name: '',
-    id: '',
-    name: '',
-    color: '',
-    warnings: {
-      self_wake_percent: {
-        enabled: true,
-        parameter: 50,
-        description: '',
-      },
-      lost_waker: {
-        enabled: true,
-      },
-      never_yielded: {
-        enabled: true,
-        parameter: 1,
-        description: '',
-      },
-      auto_boxed_feature: {
-        enabled: true,
-      },
-      large_feature: {
-        enabled: true,
-        parameter: 1024,
-        description: '',
-      }
+  app_name: '',
+  id: '',
+  name: '',
+  color: '',
+  warnings: {
+    self_wake_percent: {
+      enabled: true,
+      parameter: 50,
+      description: '',
     },
+    lost_waker: {
+      enabled: true,
+    },
+    never_yielded: {
+      enabled: true,
+      parameter: 1,
+      description: '',
+    },
+    auto_boxed_feature: {
+      enabled: true,
+    },
+    large_feature: {
+      enabled: true,
+      parameter: 1024,
+      description: '',
+    }
+  },
 });
 
 const defaultItem: Ref<{
-    app_name: string,
-    id: any;
-    name: any;
-    color: string,
-    warnings: TaskWarnings
+  app_name: string,
+  id: any;
+  name: any;
+  color: string,
+  warnings: TaskWarnings
 }> = ref({
-    app_name: '',
-    id: '',
-    name: '',
-    color: '',
-    warnings: {
-      self_wake_percent: {
-        enabled: true,
-        parameter: 50,
-        description: '',
-      },
-      lost_waker: {
-        enabled: true,
-      },
-      never_yielded: {
-        enabled: true,
-        parameter: 1, 
-        description: '',
-      },
-      auto_boxed_feature: {
-        enabled: true,
-      },
-      large_feature: {
-        enabled: true,
-        parameter: 1024,
-        description: '',
-      }
+  app_name: '',
+  id: '',
+  name: '',
+  color: '',
+  warnings: {
+    self_wake_percent: {
+      enabled: true,
+      parameter: 50,
+      description: '',
     },
+    lost_waker: {
+      enabled: true,
+    },
+    never_yielded: {
+      enabled: true,
+      parameter: 1,
+      description: '',
+    },
+    auto_boxed_feature: {
+      enabled: true,
+    },
+    large_feature: {
+      enabled: true,
+      parameter: 1024,
+      description: '',
+    }
+  },
 });
 
 function close() {
@@ -141,9 +141,9 @@ function close() {
 }
 
 async function save() {
-    dialog.value = false;
-    dataStore.editTask(editedItem.value.id, editedItem.value.name, editedItem.value.color, editedItem.value.app_name, editedItem.value.warnings);
-    close();
+  dialog.value = false;
+  dataStore.editTask(editedItem.value.id, editedItem.value.name, editedItem.value.color, editedItem.value.app_name, editedItem.value.warnings);
+  close();
 }
 
 function editTask(task: Task) {
@@ -170,80 +170,80 @@ listen<any[]>('update:tasks', e => {
 
 <template>
   <v-card elevation="2">
-      <v-dialog v-model="dialog" max-width="500" persistent>
-          <v-card v-click-outside="close">
-              <v-card-title class="pa-4 bg-primary">
-                  <span class="title text-white">Edit task</span>
-              </v-card-title>
+    <v-dialog v-model="dialog" max-width="500" persistent>
+      <v-card v-click-outside="close">
+        <v-card-title class="pa-4 bg-primary">
+          <span class="title text-white">Edit task</span>
+        </v-card-title>
 
-              <v-card-text>
-                <v-form ref="form" lazy-validation @submit.prevent>
-                    <v-row class="mb-4 mt-4">
-                      <v-text-field
-                        variant="outlined"
-                        hide-details
-                        v-model="editedItem.name"
-                        label="Task Name"
-                      ></v-text-field>
-                    </v-row>
+        <v-card-text>
+          <v-form ref="form" lazy-validation @submit.prevent>
+            <v-row class="mb-4 mt-4">
+              <v-text-field
+                  variant="outlined"
+                  hide-details
+                  v-model="editedItem.name"
+                  label="Task Name"
+              ></v-text-field>
+            </v-row>
 
-                    <v-row class="mb-4">
-                      <v-color-picker
-                        v-model="editedItem.color"
-                        flat
-                        hide-canvas
-                        hide-inputs
-                        show-swatches
-                        swatches-max-height="150"
-                      ></v-color-picker>
-                    </v-row>
+            <v-row class="mb-4">
+              <v-color-picker
+                  v-model="editedItem.color"
+                  flat
+                  hide-canvas
+                  hide-inputs
+                  show-swatches
+                  swatches-max-height="150"
+              ></v-color-picker>
+            </v-row>
 
-                    <v-row class="mb-4">
-                      <v-expansion-panels>
-                        <v-expansion-panel>
-                          <v-expansion-panel-title>
-                            > Warnings
-                          </v-expansion-panel-title>
+            <v-row class="mb-4">
+              <v-expansion-panels>
+                <v-expansion-panel>
+                  <v-expansion-panel-title>
+                    > Warnings
+                  </v-expansion-panel-title>
 
-                          <v-expansion-panel-text>
-                            <v-list>
-                              <v-list-item
-                                v-for="(warning, key) in editedItem.warnings"
-                                :key="key"
-                              >
-                                <v-row class="align-center justify-space-between" no-gutters>
-                                  <v-col cols="4">
-                                    <strong>{{ key }}</strong>
-                                  </v-col>
+                  <v-expansion-panel-text>
+                    <v-list>
+                      <v-list-item
+                          v-for="(warning, key) in editedItem.warnings"
+                          :key="key"
+                      >
+                        <v-row class="align-center justify-space-between" no-gutters>
+                          <v-col cols="4">
+                            <strong>{{ key }}</strong>
+                          </v-col>
 
-                                  <v-col cols="8" class="d-flex justify-end align-center">
-                                    <v-text-field
-                                      v-if="warning.parameter !== undefined"
-                                      v-model.number="warning.parameter"
-                                      label="Parameter"
-                                      type="number"
-                                      hide-details
-                                      density="compact"
-                                      class="mr-4"
-                                      style="max-width: 120px"
-                                    />
+                          <v-col cols="8" class="d-flex justify-end align-center">
+                            <v-text-field
+                                v-if="warning.parameter !== undefined"
+                                v-model.number="warning.parameter"
+                                label="Parameter"
+                                type="number"
+                                hide-details
+                                density="compact"
+                                class="mr-4"
+                                style="max-width: 120px"
+                            />
 
-                                    <v-switch
-                                      v-model="warning.enabled"
-                                      color="green"
-                                      inset
-                                      hide-details
-                                    />
-                                  </v-col>
-                                </v-row>
-                              </v-list-item>
-                            </v-list>
-                          </v-expansion-panel-text>
-                        </v-expansion-panel>
-                      </v-expansion-panels>
-                    </v-row>
-                </v-form>
-              </v-card-text>
+                            <v-switch
+                                v-model="warning.enabled"
+                                color="green"
+                                inset
+                                hide-details
+                            />
+                          </v-col>
+                        </v-row>
+                      </v-list-item>
+                    </v-list>
+                  </v-expansion-panel-text>
+                </v-expansion-panel>
+              </v-expansion-panels>
+            </v-row>
+          </v-form>
+        </v-card-text>
 
         <v-card-actions class="pa-4">
           <v-spacer></v-spacer>

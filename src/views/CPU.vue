@@ -1,40 +1,41 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
-import { listen } from '@tauri-apps/api/event'
+import {computed, nextTick, onBeforeUnmount, ref, watch} from 'vue'
+import {listen} from '@tauri-apps/api/event'
 import throttle from 'lodash.throttle'
 import {
-  Chart,
   BarController,
   BarElement,
-  TimeScale,
-  LinearScale,
   CategoryScale,
-  Title,
-  Tooltip,
-  Legend,
+  Chart,
   type ChartOptions,
-  type LegendItem
+  Legend,
+  type LegendItem,
+  LinearScale,
+  TimeScale,
+  Title,
+  Tooltip
 } from 'chart.js'
 import zoomPlugin from 'chartjs-plugin-zoom'
 import datalabelsPlugin from 'chartjs-plugin-datalabels'
 import 'chartjs-adapter-date-fns'
-import type { TimeStamp, TaskOpMap } from '@/types/async_ops'
-import { useDataStore } from '@/stores/data'
+import type {TaskOpMap, TimeStamp} from '@/types/async_ops'
+import {useDataStore} from '@/stores/data'
 
 Chart.register(
-  BarController,
-  BarElement,
-  TimeScale,
-  LinearScale,
-  CategoryScale,
-  Title,
-  Tooltip,
-  Legend,
-  zoomPlugin,
-  datalabelsPlugin
+    BarController,
+    BarElement,
+    TimeScale,
+    LinearScale,
+    CategoryScale,
+    Title,
+    Tooltip,
+    Legend,
+    zoomPlugin,
+    datalabelsPlugin
 )
 
 const dataStore = useDataStore()
+
 function toMillis(ts: TimeStamp | null) {
   if (!ts) return 0
   return ts.seconds * 1000 + ts.nanos / 1_000_000
@@ -57,16 +58,16 @@ let chart: Chart<'bar'> | null = null
 const tasks = computed(() => {
   return Object.entries(rawOps.value).map(([key, taskOp], idx) => ({
     displayName:
-      taskOp.task_name && taskOp.task_name.trim().length > 0
-        ? taskOp.task_name
-        : key || String(idx),
+        taskOp.task_name && taskOp.task_name.trim().length > 0
+            ? taskOp.task_name
+            : key || String(idx),
     operations: taskOp.operations
-      .filter(o => o.started_at && o.stopped_at)
-      .map(o => ({
-        start: toMillis(o.started_at!),
-        end: toMillis(o.stopped_at!),
-        type: o.resource_target ?? 'unknown'
-      }))
+        .filter(o => o.started_at && o.stopped_at)
+        .map(o => ({
+          start: toMillis(o.started_at!),
+          end: toMillis(o.stopped_at!),
+          type: o.resource_target ?? 'unknown'
+        }))
   }))
 })
 
@@ -104,7 +105,7 @@ const borderPalette = [
 
 const typeColors = computed(() => {
   const types = Array.from(
-    new Set(tasks.value.flatMap(t => t.operations.map(o => o.type)))
+      new Set(tasks.value.flatMap(t => t.operations.map(o => o.type)))
   ).sort()
   const map: Record<string, { bg: string, border: string }> = {}
   types.forEach((ty, i) => {
@@ -118,17 +119,17 @@ const typeColors = computed(() => {
 
 function buildDataset(): OpDatum[] {
   return tasks.value.flatMap(task =>
-    task.operations.map((op, opIndex) => {
-      const { bg, border } = typeColors.value[op.type]!
-      return {
-        x: [op.start, op.end],
-        y: task.displayName,
-        label: `${op.type.charAt(0) || '#'}${opIndex + 1}`,
-        backgroundColor: bg,
-        borderColor: border,
-        borderWidth: 1
-      }
-    })
+      task.operations.map((op, opIndex) => {
+        const {bg, border} = typeColors.value[op.type]!
+        return {
+          x: [op.start, op.end],
+          y: task.displayName,
+          label: `${op.type.charAt(0) || '#'}${opIndex + 1}`,
+          backgroundColor: bg,
+          borderColor: border,
+          borderWidth: 1
+        }
+      })
   )
 }
 
@@ -140,11 +141,11 @@ const chartOptions = computed<ChartOptions<'bar'>>(() => ({
       type: 'time',
       min: sliderRange.value[0],
       max: sliderRange.value[1],
-      title: { display: true, text: 'Time' }
+      title: {display: true, text: 'Time'}
     },
     y: {
       type: 'category',
-      title: { display: true, text: 'Task' },
+      title: {display: true, text: 'Task'},
       labels: tasks.value.map(t => t.displayName),
     }
   },
@@ -154,7 +155,7 @@ const chartOptions = computed<ChartOptions<'bar'>>(() => ({
       position: 'bottom',
       labels: {
         generateLabels: () => {
-          return Object.entries(typeColors.value).map(([text, { bg, border }]) => ({
+          return Object.entries(typeColors.value).map(([text, {bg, border}]) => ({
             text,
             fillStyle: bg,
             strokeStyle: border,
@@ -173,11 +174,11 @@ const chartOptions = computed<ChartOptions<'bar'>>(() => ({
       }
     },
     zoom: {
-      pan: { enabled: true, mode: 'x' },
-      zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
+      pan: {enabled: true, mode: 'x'},
+      zoom: {wheel: {enabled: true}, pinch: {enabled: true}, mode: 'x'}
     },
     datalabels: {
-      color: '#000', font: { size: 10, weight: 'bold' },
+      color: '#000', font: {size: 10, weight: 'bold'},
       anchor: 'center', align: 'center',
       formatter: (v) => (v as OpDatum).label
     }
@@ -221,11 +222,10 @@ function updateChart() {
 }
 
 
-
 watch(sliderRange, ([min, max]) => {
   fromInput.value = formatTime(min);
   toInput.value = formatTime(max);
-}, { deep: true });
+}, {deep: true});
 
 
 function resetView() {
@@ -277,10 +277,10 @@ function parseTimeOnBase(baseMs: number, hhmmssSSS: string): number | null {
   const ms = Number(msStr.padEnd(3, '0')); // allow 1–3 digits
 
   if (
-    isNaN(h) || h < 0 || h > 23 ||
-    isNaN(m) || m < 0 || m > 59 ||
-    isNaN(s) || s < 0 || s > 59 ||
-    isNaN(ms) || ms < 0 || ms > 999
+      isNaN(h) || h < 0 || h > 23 ||
+      isNaN(m) || m < 0 || m > 59 ||
+      isNaN(s) || s < 0 || s > 59 ||
+      isNaN(ms) || ms < 0 || ms > 999
   ) {
     return null;
   }
@@ -300,7 +300,6 @@ function formatTime(ms: number): string {
   const mss = String(d.getMilliseconds()).padStart(3, '0');
   return `${hh}:${mm}:${ss}.${mss}`;
 }
-
 
 
 function onFromBlur() {
@@ -326,11 +325,11 @@ function onToBlur() {
 watch(sliderRange, ([min, max]) => {
   fromInput.value = formatTime(min)
   toInput.value = formatTime(max)
-}, { deep: true })
+}, {deep: true})
 
 watch(sliderRange, () => {
   updateChart()
-}, { deep: true })
+}, {deep: true})
 
 </script>
 
@@ -340,7 +339,7 @@ watch(sliderRange, () => {
     <v-card-text>
       <h1 class="mb-4">Operations Timeline</h1>
 
-      <v-skeleton-loader v-if="!loaded" type="image, paragraph" />
+      <v-skeleton-loader v-if="!loaded" type="image, paragraph"/>
 
       <div v-else>
         <canvas ref="canvasRef" class="timeline-canvas"></canvas>
@@ -348,14 +347,14 @@ watch(sliderRange, () => {
         <v-row align="center" class="mt-4">
           <v-col cols="10">
             <v-range-slider v-model="sliderRange" :min="dataMin" :max="dataMax" :step="stepSize" hide-details dense
-              thumb-label>
+                            thumb-label>
               <template #append>
                 <div style="display: flex; align-items: center; gap: 4px;">
                   <input type="text" v-model="fromInput" @blur="onFromBlur" @keyup.enter.prevent="onFromBlur"
-                    :style="{ width: '7.5em', fontSize: '0.9em' }" />
+                         :style="{ width: '7.5em', fontSize: '0.9em' }"/>
                   —
                   <input type="text" v-model="toInput" @blur="onToBlur" @keyup.enter.prevent="onToBlur"
-                    :style="{ width: '7.5em', fontSize: '0.9em' }" />
+                         :style="{ width: '7.5em', fontSize: '0.9em' }"/>
                 </div>
               </template>
             </v-range-slider>

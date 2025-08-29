@@ -24,7 +24,7 @@ pub enum TaskState {
         /// Optional human‐readable explanation.
         reason: Option<String>,
     },
-    Starved
+    Starved,
 }
 
 /// A traced task with timing and scheduling information.
