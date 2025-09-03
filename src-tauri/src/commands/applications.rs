@@ -2,9 +2,25 @@ use crate::error::Error;
 use crate::state_manager::connection_manager::Connection;
 use crate::state_manager::StateManager;
 use log::info;
+use serde::{Deserialize, Serialize};
+use std::path::Path;
 use std::sync::Arc;
-use tauri::State;
+use tauri::State as TauriState;
+use tokio::fs;
 use uuid::Uuid;
+
+#[derive(Serialize, Deserialize)]
+pub struct ExportEntry {
+    pub app_dir: String,
+    pub title: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct TimestampEntry {
+    pub ts: String,
+    pub path: String,
+    pub comment_preview: Option<String>,
+}
 
 /// Add a new application to be monitored.
 ///
@@ -26,7 +42,7 @@ use uuid::Uuid;
 /// If URL parsing fails, returns the appropriate [`Error`].
 #[tauri::command]
 pub async fn applications_add(
-    state_manager: State<'_, Arc<StateManager>>,
+    state_manager: TauriState<'_, Arc<StateManager>>,
     title: String,
     url: &str,
 ) -> Result<Uuid, Error> {
@@ -57,7 +73,7 @@ pub async fn applications_add(
 /// Returns `Ok(())` on success, or an [`Error`] on failure.
 #[tauri::command]
 pub async fn delete_application(
-    state_manager: State<'_, Arc<StateManager>>,
+    state_manager: TauriState<'_, Arc<StateManager>>,
     uuid: Uuid,
 ) -> Result<(), Error> {
     let _ = state_manager.delete_application(uuid).await;
@@ -81,7 +97,7 @@ pub async fn delete_application(
 /// if the connection manager fails to connect.
 #[tauri::command]
 pub async fn enable_app(
-    state_manager: State<'_, Arc<StateManager>>,
+    state_manager: TauriState<'_, Arc<StateManager>>,
     uuid: Uuid,
 ) -> Result<(), Error> {
     let apps = state_manager.state.get_current_applications_list().await;
@@ -114,7 +130,7 @@ pub async fn enable_app(
 /// Returns `Ok(())` or an [`Error`] if something goes wrong.
 #[tauri::command]
 pub async fn disable_app(
-    state_manager: State<'_, Arc<StateManager>>,
+    state_manager: TauriState<'_, Arc<StateManager>>,
     uuid: Uuid,
 ) -> Result<(), Error> {
     state_manager.disable_application(uuid).await
@@ -135,7 +151,7 @@ pub async fn disable_app(
 /// On succes, returns the new Uuid of the application
 #[tauri::command]
 pub async fn edit_application(
-    state_manager: State<'_, Arc<StateManager>>,
+    state_manager: TauriState<'_, Arc<StateManager>>,
     uuid: Uuid,
     app_title: String,
     app_url: String,
@@ -155,7 +171,7 @@ pub async fn edit_application(
 /// * `new_pid` – freshly discovered process ID
 #[tauri::command]
 pub async fn update_app_pid(
-    state_manager: State<'_, Arc<StateManager>>,
+    state_manager: TauriState<'_, Arc<StateManager>>,
     app_handle: tauri::AppHandle,
     uuid: Uuid,
     new_pid: u32,
@@ -173,7 +189,7 @@ pub async fn update_app_pid(
 /// or poll at intervals.
 #[tauri::command]
 pub async fn get_app_pid(
-    state_manager: State<'_, Arc<StateManager>>,
+    state_manager: TauriState<'_, Arc<StateManager>>,
     uuid: Uuid,
 ) -> Result<u32, Error> {
     state_manager
@@ -181,4 +197,118 @@ pub async fn get_app_pid(
         .get_pid_for(uuid)
         .await
         .ok_or_else(|| Error::Anyhow(anyhow::anyhow!("App {uuid} not found")))
+}
+
+#[tauri::command]
+pub async fn export_app_instance(
+    title: String,
+    name: String,
+    state: TauriState<'_, Arc<StateManager>>,
+) -> Result<String, String> {
+    let state = state.inner();
+    state
+        .state
+        .export_app_instance(title, name)
+        .await
+        .map(|p| p.to_string_lossy().to_string())
+        .map_err(|e| format!("Export error: {}", e))
+}
+
+#[tauri::command]
+pub async fn list_exports(storage_folder: String) -> Result<Vec<ExportEntry>, String> {
+    let exports_base = Path::new(&storage_folder).join("exports");
+    let mut out: Vec<ExportEntry> = Vec::new();
+
+    let read_dir = match fs::read_dir(&exports_base).await {
+        Ok(rd) => rd,
+        Err(_) => return Ok(out),
+    };
+
+    let mut dir = read_dir;
+    while let Some(entry) = dir.next_entry().await.map_err(|e| e.to_string())? {
+        let file_type = entry.file_type().await.map_err(|e| e.to_string())?;
+        if file_type.is_dir() {
+            let folder_name = entry.file_name().to_string_lossy().to_string();
+            let title = folder_name.replace('-', " ");
+            out.push(ExportEntry {
+                app_dir: folder_name,
+                title,
+            });
+        }
+    }
+    Ok(out)
+}
+
+#[tauri::command]
+pub async fn list_app_timestamps(
+    storage_folder: String,
+    app_dir: String,
+) -> Result<Vec<TimestampEntry>, String> {
+    let app_folder = Path::new(&storage_folder).join("exports").join(&app_dir);
+    let mut out: Vec<TimestampEntry> = Vec::new();
+
+    let read_dir = match fs::read_dir(&app_folder).await {
+        Ok(rd) => rd,
+        Err(_) => return Ok(out),
+    };
+
+    let mut dir = read_dir;
+    while let Some(entry) = dir.next_entry().await.map_err(|e| e.to_string())? {
+        let meta = entry.file_type().await.map_err(|e| e.to_string())?;
+        if meta.is_dir() {
+            let ts_name = entry.file_name().to_string_lossy().to_string();
+           let comment_path = app_folder.join(&ts_name).join("comment.txt");
+            let comment_preview = match fs::read_to_string(&comment_path).await {
+                Ok(s) => {
+                    let s = s.trim().to_string();
+                    if s.is_empty() {
+                        None
+                    } else {
+                        Some(if s.len() > 200 {
+                            s[..200].to_string() + "..."
+                        } else {
+                            s
+                        })
+                    }
+                }
+                Err(_) => None,
+            };
+            out.push(TimestampEntry {
+                ts: ts_name.clone(),
+                path: app_folder.join(&ts_name).to_string_lossy().to_string(),
+                comment_preview,
+            });
+        }
+    }
+
+    out.sort_by(|a, b| b.ts.cmp(&a.ts));
+    Ok(out)
+}
+
+#[tauri::command]
+pub async fn import_from_export_folder(
+    storage_folder: String,
+    app_dir: String,
+    ts: String,
+    state: TauriState<'_, Arc<StateManager>>,
+) -> Result<(), String> {
+    let base = Path::new(&storage_folder)
+        .join("exports")
+        .join(&app_dir)
+        .join(&ts);
+
+    if !base.exists() {
+        return Err(format!(
+            "Export folder not found: {}",
+            base.to_string_lossy()
+        ));
+    }
+    state
+        .inner()
+        .state
+        .import_from_export_folder(base)
+        .await
+        .map_err(|e| format!("Import error: {}", e))?;
+
+    Ok(())
 }

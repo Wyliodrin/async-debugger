@@ -21,6 +21,7 @@ use console_api::async_ops::AsyncOpUpdate;
 use console_api::resources::ResourceUpdate;
 use console_api::tasks::TaskUpdate;
 use log::{debug, error, info, warn};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::fs;
@@ -95,6 +96,24 @@ impl State {
         Ok(State {
             database: Arc::new(database),
         })
+    }
+
+    /// Export an application instance (app id + pid) into a folder under
+    /// <storage>/exports/<appid>-<pid>-<ts>-<sanitized_name>/.
+    /// On success, exported entities are removed from permanent DB and written to disk.
+    pub async fn export_app_instance(
+        &self,
+        title: String,
+        name: String,
+    ) -> Result<std::path::PathBuf, TraceError> {
+        self.database.export_app_instance(title, name).await
+    }
+
+    /// Import entities from an export folder on disk. The folder should contain
+    /// the JSON files (applications.json, tasks.json, resources.json, polls.json, async_ops.json, tasks_ops.json).
+    /// Imported entries overwrite the in-memory view for those application IDs and their related entities.
+    pub async fn import_from_export_folder(&self, p0: PathBuf) -> Result<(), String> {
+        self.database.import_from_export_folder(p0).await
     }
 
     // region APPLICATIONS
@@ -456,7 +475,7 @@ impl State {
             }
             warnings
         } else {
-            return Vec::new();
+            Vec::new()
         }
     }
 

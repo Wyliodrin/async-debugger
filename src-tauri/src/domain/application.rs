@@ -39,9 +39,9 @@ pub(crate) enum ConnectionStatus {
 /// Serialized to disk for state persistence.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub(crate) struct Application {
-    pid: u32,
+    pub(crate) pid: u32,
     id: Uuid,
-    title: String,
+    pub(crate) title: String,
     url: Url,
     start_time: String,
     cpu_usage: f32,

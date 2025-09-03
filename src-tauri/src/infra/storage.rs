@@ -9,6 +9,7 @@ use crate::domain::{
     Task,
 };
 use async_trait::async_trait;
+use std::path::PathBuf;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -60,4 +61,12 @@ pub(crate) trait Storage: Send + Sync {
 
     /// Write guard for task operations.
     async fn tasks_ops_write(&self) -> WriteableDataBaseGuard<'_, HashMap<String, Arc<TaskOp>>>;
+
+    async fn import_from_export_folder(&self, folder: PathBuf) -> Result<(), String>;
+
+    async fn export_app_instance(
+        &self,
+        app_id: String,
+        user_name: String,
+    ) -> Result<PathBuf, crate::error::Error>;
 }

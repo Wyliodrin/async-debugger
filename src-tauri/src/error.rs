@@ -12,7 +12,7 @@ pub enum Error {
     ApplicationAlreadyConnected(String),
 
     /// A catch-all error for uses of `anyhow::Error`.
-    #[error("TODO: add message for me")]
+    #[error("The app encountered a problem")]
     Anyhow(#[from] anyhow::Error),
 
     /// The specified file or directory path was not found.

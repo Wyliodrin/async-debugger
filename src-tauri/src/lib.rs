@@ -83,6 +83,10 @@ pub async fn run() {
             commands::applications::edit_application,
             commands::applications::update_app_pid,
             commands::applications::get_app_pid,
+            commands::applications::export_app_instance,
+            commands::applications::list_exports,
+            commands::applications::list_app_timestamps,
+            commands::applications::import_from_export_folder,
             commands::tasks::remove_task,
             commands::tasks::edit_task,
         ])

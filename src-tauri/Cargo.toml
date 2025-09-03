@@ -39,4 +39,5 @@ tauri-plugin-dialog = "2"
 chrono = { version = "0.4.1", features = ["serde"] }
 sysinfo = "0.35.2"
 tempfile = "3.20.0"
+futures = "0.3.31"
 
