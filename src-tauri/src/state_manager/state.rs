@@ -16,7 +16,7 @@ use crate::{
         resources::map_to_domain_resource, tasks::map_to_domain_task,
     },
 };
-use chrono::{DateTime, Local, TimeZone, Utc};
+use chrono::{DateTime, Local, TimeZone};
 use console_api::async_ops::AsyncOpUpdate;
 use console_api::resources::ResourceUpdate;
 use console_api::tasks::TaskUpdate;
@@ -329,7 +329,7 @@ impl State {
                         if !matches!(task.state, TaskState::Stopped { at: _, reason: _ }) {
                             info!("Marking task {} as Stopped", key);
                             task.state = TaskState::Stopped {
-                                at: Utc::now(),
+                                at: Local::now(),
                                 reason: None,
                             };
                             {
@@ -503,7 +503,7 @@ impl State {
                             let t = Arc::make_mut(task_arc);
                             if !matches!(t.state, TaskState::Stopped { at: _, reason: _ }) {
                                 t.state = TaskState::Stopped {
-                                    at: Utc::now(),
+                                    at: Local::now(),
                                     reason: None,
                                 };
 
@@ -562,14 +562,14 @@ impl State {
 
     /// Stops the task identified by `task_id` if it is currently running.
     ///
-    /// The task state is set to `Stopped` with the current UTC timestamp.
+    /// The task state is set to `Stopped` with the current local timestamp.
     pub async fn stop_task(&self, task_id: &str) {
         let mut tasks = self.database.tasks_write().await;
         if let Some(task_arc) = tasks.get_mut(task_id) {
             let task = Arc::make_mut(task_arc);
             if !matches!(task.state, TaskState::Stopped { at: _, reason: _ }) {
                 task.state = TaskState::Stopped {
-                    at: Utc::now(),
+                    at: Local::now(),
                     reason: None,
                 };
             }

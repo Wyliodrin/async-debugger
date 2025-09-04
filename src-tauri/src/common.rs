@@ -1,4 +1,4 @@
-use chrono::DateTime;
+use chrono::{DateTime, Local};
 use serde::Serialize;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -92,11 +92,12 @@ pub fn get_process_start_time(pid: u32) -> Option<String> {
     let mut sys = System::new_all();
     sys.refresh_all();
 
+    let local = Local;
+
     // Look up the process by PID.
     if let Some(process) = sys.process(Pid::from_u32(pid)) {
         // Convert the process start time (seconds since epoch) into a formatted string.
-        let date: String = DateTime::from_timestamp(process.start_time() as i64, 0)
-            .unwrap()
+        let date: String = DateTime::from_timestamp(process.start_time() as i64, 0)?.with_timezone(&local)
             .format("%d/%m/%Y %H:%M:%S")
             .to_string();
         return Some(date);

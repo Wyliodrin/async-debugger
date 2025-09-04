@@ -7,7 +7,7 @@ use crate::error::Error as TraceError;
 use crate::mappers::read_file;
 use crate::warnings::TaskWarnings;
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::SystemTime;
@@ -20,7 +20,7 @@ pub enum TaskState {
     /// Task has stopped at a given timestamp for an optional reason.
     Stopped {
         /// When the stop occurred.
-        at: DateTime<Utc>,
+        at: DateTime<Local>,
         /// Optional human‐readable explanation.
         reason: Option<String>,
     },
