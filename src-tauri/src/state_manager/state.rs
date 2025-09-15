@@ -98,8 +98,8 @@ impl State {
         })
     }
 
-    /// Export an application instance (app id + pid) into a folder under
-    /// <storage>/exports/<appid>-<pid>-<ts>-<sanitized_name>/.
+    /// Export an application instance into a folder under
+    /// <storage>/exports/<app-name>/<timestamp>.
     /// On success, exported entities are removed from permanent DB and written to disk.
     pub async fn export_app_instance(
         &self,
