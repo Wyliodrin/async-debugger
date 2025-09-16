@@ -915,6 +915,29 @@ impl State {
                 return;
             }
 
+            let make_overview = |started: TimeStamp,
+                                 stopped: Option<TimeStamp>,
+                                 resource_target: Option<String>,
+                                 resource_opt: Option<Arc<Resource>>,
+                                 app_opt: Option<&Arc<Application>>|
+             -> CPUOverview {
+
+                let location = resource_opt
+                    .as_ref()
+                    .and_then(|res| res.location.clone());
+                println!("location is {:?}", location);
+
+                let pid = app_opt.as_ref().and_then(|a| Option::from(a.pid));
+
+                CPUOverview {
+                    started_at: Some(started),
+                    stopped_at: stopped,
+                    resource_target,
+                    location,
+                    pid,
+                }
+            };
+
             // Insert any new async-ops
             for raw in async_op_update.new_async_ops {
                 if let Some(mut domain_async_op) = map_to_domain_async_op(&raw) {
@@ -946,6 +969,13 @@ impl State {
                 } else {
                     resource_target = None;
                 }
+                let async_op_arc = self.database.async_ops_read().await.get(&key).cloned();
+                let resource_for_resource_id = if let Some(ref ao) = async_op_arc {
+                    let rkey = format!("{}.{}", app.title(), ao.resource_id);
+                    self.database.resources_read().await.get(&rkey).cloned()
+                } else {
+                    None
+                };
                 match (updated_async_op.task_id, updated_async_op.poll_stats) {
                     (Some(task_id), Some(poll_stats)) => {
                         if let Some(started_at) = poll_stats.last_poll_started {
@@ -975,58 +1005,66 @@ impl State {
                                         }
                                     } else {
                                         if poll_stats.last_poll_ended.is_some() {
-                                            task_op.operations.push(CPUOverview {
-                                                started_at: Some(TimeStamp {
+                                            task_op.operations.push(make_overview(
+                                                TimeStamp {
                                                     seconds: started_at.seconds,
                                                     nanos: started_at.nanos,
+                                                },
+                                                poll_stats.last_poll_ended.map(|e| TimeStamp {
+                                                    seconds: e.seconds,
+                                                    nanos: e.nanos,
                                                 }),
-                                                stopped_at: Some(TimeStamp {
-                                                    seconds: poll_stats
-                                                        .last_poll_ended
-                                                        .unwrap()
-                                                        .seconds,
-                                                    nanos: poll_stats
-                                                        .last_poll_ended
-                                                        .unwrap()
-                                                        .nanos,
-                                                }),
-                                                resource_target,
-                                            });
+                                                resource_target.clone(),
+                                                resource_for_resource_id.clone(),
+                                                self.database
+                                                    .applications_read()
+                                                    .await
+                                                    .get(&app_id),
+                                            ));
                                         } else {
-                                            task_op.operations.push(CPUOverview {
-                                                started_at: Some(TimeStamp {
+                                            task_op.operations.push(make_overview(
+                                                TimeStamp {
                                                     seconds: started_at.seconds,
                                                     nanos: started_at.nanos,
-                                                }),
-                                                stopped_at: None,
-                                                resource_target,
-                                            });
+                                                },
+                                                None,
+                                                resource_target.clone(),
+                                                resource_for_resource_id.clone(),
+                                                self.database
+                                                    .applications_read()
+                                                    .await
+                                                    .get(&app_id),
+                                            ));
                                         }
                                     }
                                 }
                             } else {
                                 let mut operations = Vec::new();
                                 if poll_stats.last_poll_ended.is_some() {
-                                    operations.push(CPUOverview {
-                                        started_at: Some(TimeStamp {
+                                    operations.push(make_overview(
+                                        TimeStamp {
                                             seconds: started_at.seconds,
                                             nanos: started_at.nanos,
+                                        },
+                                        poll_stats.last_poll_ended.map(|e| TimeStamp {
+                                            seconds: e.seconds,
+                                            nanos: e.nanos,
                                         }),
-                                        stopped_at: Some(TimeStamp {
-                                            seconds: poll_stats.last_poll_ended.unwrap().seconds,
-                                            nanos: poll_stats.last_poll_ended.unwrap().nanos,
-                                        }),
-                                        resource_target,
-                                    });
+                                        resource_target.clone(),
+                                        resource_for_resource_id.clone(),
+                                        self.database.applications_read().await.get(&app_id),
+                                    ));
                                 } else {
-                                    operations.push(CPUOverview {
-                                        started_at: Some(TimeStamp {
+                                    operations.push(make_overview(
+                                        TimeStamp {
                                             seconds: started_at.seconds,
                                             nanos: started_at.nanos,
-                                        }),
-                                        stopped_at: None,
-                                        resource_target,
-                                    });
+                                        },
+                                        None,
+                                        resource_target.clone(),
+                                        resource_for_resource_id.clone(),
+                                        self.database.applications_read().await.get(&app_id),
+                                    ));
                                 }
 
                                 let task_name;

@@ -42,6 +42,8 @@ pub(crate) struct CPUOverview {
 
     /// Optional resource target associated with this CPU slice.
     pub resource_target: Option<String>,
+    pub location: Option<String>,
+    pub pid: Option<u32>,
 }
 
 /// Aggregated CPU overview operations grouped by task.
@@ -192,11 +194,15 @@ mod tests {
             started_at: Some(ts1.clone()),
             stopped_at: Some(ts2.clone()),
             resource_target: Some("res1".into()),
+            location: None,
+            pid: None,
         };
         let cpu2 = CPUOverview {
             started_at: None,
             stopped_at: None,
             resource_target: None,
+            location: None,
+            pid: None,
         };
 
         let mut map: HashMap<String, TaskOp> = HashMap::new();
