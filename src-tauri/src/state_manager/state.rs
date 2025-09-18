@@ -2,9 +2,9 @@ use super::connection_manager::{AppUpdate, Connection};
 use super::database::Database;
 use crate::common::{get_pid_hosting_at, rename_database_keys, rename_database_keys_and_app_name};
 use crate::domain::application::{ApplicationState, ConnectionStatus};
-use crate::domain::async_op::{CPUOverview, TaskOp, TimeStamp};
+use crate::domain::async_op::{CPUOverview, TaskOp};
 use crate::domain::resource::ResourceStatus;
-use crate::domain::{duration::Duration, TaskState};
+use crate::domain::{TaskState};
 use crate::error::Error as TraceError;
 use crate::infra::guard::DataBaseWrite;
 use crate::infra::storage::Storage;
@@ -23,7 +23,7 @@ use console_api::tasks::TaskUpdate;
 use log::{debug, error, info, warn};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH, Duration};
 use tokio::fs;
 use uuid::Uuid;
 
@@ -333,7 +333,7 @@ impl State {
                     // Handle busy time & poll stats
                     if let Some(poll_stats) = updated_task.poll_stats {
                         if let Some(dur) = poll_stats.busy_time {
-                            task.busy = Some(Duration::new(dur.seconds, dur.nanos));
+                            task.busy = Some(Duration::new(dur.seconds as u64, dur.nanos as u32));
                         }
 
                         task.stats.last_poll_started =
@@ -365,7 +365,7 @@ impl State {
                                         seconds -= 1;
                                         nano = 1_000_000_000 + nano;
                                     }
-                                    Some(Duration::new(seconds, nano))
+                                    Some(Duration::new(seconds as u64, nano as u32))
                                 };
                             }
                         }
@@ -387,39 +387,39 @@ impl State {
                                     nano = 1_000_000_000 + nano;
                                 }
 
-                                Some(Duration::new(seconds, nano))
+                                Some(Duration::new(seconds as u64, nano as u32))
                             };
                         }
                     }
 
                     // Handle scheduled time
                     if let Some(scheduled) = updated_task.scheduled_time {
-                        task.scheduled = Some(Duration::new(scheduled.seconds, scheduled.nanos))
+                        task.scheduled = Some(Duration::new(scheduled.seconds as u64, scheduled.nanos as u32))
                     }
 
                     // Compute idle time
                     task.idle = {
                         let idle = match task.runtime.clone() {
                             Some(runtime_duration) => {
-                                let mut seconds = runtime_duration.seconds;
-                                let mut nanos = runtime_duration.nanos;
+                                let mut seconds = runtime_duration.as_secs();
+                                let mut nanos = runtime_duration.as_nanos();
                                 if let Some(busy_duration) = task.busy.clone() {
                                     if let Some(schedule_duration) = task.scheduled.clone() {
                                         seconds = seconds
-                                            - busy_duration.seconds
-                                            - schedule_duration.seconds;
+                                            - busy_duration.as_secs()
+                                            - schedule_duration.as_secs();
                                         nanos =
-                                            nanos - busy_duration.nanos - schedule_duration.nanos;
+                                            nanos - busy_duration.as_nanos() - schedule_duration.as_nanos();
                                     } else {
-                                        seconds = seconds - busy_duration.seconds;
-                                        nanos = nanos - busy_duration.nanos;
+                                        seconds = seconds - busy_duration.as_secs();
+                                        nanos = nanos - busy_duration.as_nanos();
                                     }
                                 }
                                 while nanos < 0 {
                                     seconds -= 1;
                                     nanos += 1000000000;
                                 }
-                                Some(Duration::new(seconds, nanos))
+                                Some(Duration::new(seconds, nanos as u32))
                             }
                             None => None,
                         };
@@ -708,7 +708,7 @@ impl State {
                     self.database
                         .resources_write()
                         .await
-                        .insert(domain_resource.id(), Arc::new(domain_resource));
+                        .insert(domain_resource.id().expect("Error"), Arc::new(domain_resource));
                 }
             }
 
@@ -732,7 +732,7 @@ impl State {
                                         seconds -= 1;
                                         nano = 1_000_000_000 + nano;
                                     }
-                                    Some(Duration::new(seconds, nano))
+                                    Some(Duration::new(seconds as u64, nano as u32))
                                 };
                             }
                         }
@@ -751,7 +751,7 @@ impl State {
                                     seconds -= 1;
                                     nano = 1_000_000_000 + nano;
                                 }
-                                Some(Duration::new(seconds, nano))
+                                Some(Duration::new(seconds as u64, nano as u32))
                             };
                         }
                     }
@@ -915,8 +915,8 @@ impl State {
                 return;
             }
 
-            let make_overview = |started: TimeStamp,
-                                 stopped: Option<TimeStamp>,
+            let make_overview = |started: DateTime<Local>,
+                                 stopped: Option<DateTime<Local>>,
                                  resource_target: Option<String>,
                                  resource_opt: Option<Arc<Resource>>,
                                  app_opt: Option<&Arc<Application>>|
@@ -984,56 +984,52 @@ impl State {
                             if let Some(task_op) = map.get_mut(&key) {
                                 let task_op = Arc::make_mut(task_op);
                                 if let Some(last_element) = task_op.operations.last_mut() {
-                                    let overview_started_at =
-                                        last_element.started_at.as_ref().unwrap();
-
-                                    if started_at.nanos == overview_started_at.nanos
-                                        && started_at.seconds == overview_started_at.seconds
+                                    let overview_started_at = match last_element.started_at.as_ref() {
+                                        Some(ts) => ts,
+                                        None => continue,
+                                    };
+                                    if started_at.seconds == overview_started_at.timestamp()
+                                        && (started_at.nanos as u32) == overview_started_at.timestamp_subsec_nanos()
                                     {
-                                        if poll_stats.last_poll_ended.is_some()
-                                            && last_element.stopped_at.is_none()
-                                        {
-                                            last_element.stopped_at = Some(TimeStamp {
-                                                seconds: poll_stats
-                                                    .last_poll_ended
-                                                    .unwrap()
-                                                    .seconds,
-                                                nanos: poll_stats.last_poll_ended.unwrap().nanos,
-                                            });
-                                        } else {
-                                            continue;
+                                        if last_element.stopped_at.is_none() {
+                                            if let Some(last_poll_ended) = &poll_stats.last_poll_ended {
+                                                last_element.stopped_at = Some(
+                                                    Local
+                                                        .timestamp_opt(last_poll_ended.seconds, last_poll_ended.nanos as u32)
+                                                        .single()
+                                                        .expect("ambiguous or nonexistent local time"),
+                                                );
+                                            } else {
+                                                continue;
+                                            }
                                         }
                                     } else {
                                         if poll_stats.last_poll_ended.is_some() {
                                             task_op.operations.push(make_overview(
-                                                TimeStamp {
-                                                    seconds: started_at.seconds,
-                                                    nanos: started_at.nanos,
-                                                },
-                                                poll_stats.last_poll_ended.map(|e| TimeStamp {
-                                                    seconds: e.seconds,
-                                                    nanos: e.nanos,
+                                                Local
+                                                    .timestamp_opt(started_at.seconds, started_at.nanos as u32)
+                                                    .single()
+                                                    .expect("ambiguous or nonexistent local time"),
+                                                poll_stats.last_poll_ended.map(|e| {
+                                                    Local
+                                                        .timestamp_opt(e.seconds, e.nanos as u32)
+                                                        .single()
+                                                        .expect("ambiguous or nonexistent local time")
                                                 }),
                                                 resource_target.clone(),
                                                 resource_for_resource_id.clone(),
-                                                self.database
-                                                    .applications_read()
-                                                    .await
-                                                    .get(&app_id),
+                                                self.database.applications_read().await.get(&app_id),
                                             ));
                                         } else {
                                             task_op.operations.push(make_overview(
-                                                TimeStamp {
-                                                    seconds: started_at.seconds,
-                                                    nanos: started_at.nanos,
-                                                },
+                                                Local
+                                                    .timestamp_opt(started_at.seconds, started_at.nanos as u32)
+                                                    .single()
+                                                    .expect("ambiguous or nonexistent local time"),
                                                 None,
                                                 resource_target.clone(),
                                                 resource_for_resource_id.clone(),
-                                                self.database
-                                                    .applications_read()
-                                                    .await
-                                                    .get(&app_id),
+                                                self.database.applications_read().await.get(&app_id),
                                             ));
                                         }
                                     }
@@ -1042,13 +1038,15 @@ impl State {
                                 let mut operations = Vec::new();
                                 if poll_stats.last_poll_ended.is_some() {
                                     operations.push(make_overview(
-                                        TimeStamp {
-                                            seconds: started_at.seconds,
-                                            nanos: started_at.nanos,
-                                        },
-                                        poll_stats.last_poll_ended.map(|e| TimeStamp {
-                                            seconds: e.seconds,
-                                            nanos: e.nanos,
+                                        Local
+                                            .timestamp_opt(started_at.seconds, started_at.nanos as u32)
+                                            .single()
+                                            .expect("ambiguous or nonexistent local time"),
+                                        poll_stats.last_poll_ended.map(|e| {
+                                            Local
+                                                .timestamp_opt(e.seconds, e.nanos as u32)
+                                                .single()
+                                                .expect("ambiguous or nonexistent local time")
                                         }),
                                         resource_target.clone(),
                                         resource_for_resource_id.clone(),
@@ -1056,11 +1054,11 @@ impl State {
                                     ));
                                 } else {
                                     operations.push(make_overview(
-                                        TimeStamp {
-                                            seconds: started_at.seconds,
-                                            nanos: started_at.nanos,
-                                        },
-                                        None,
+                                        Local
+                                            .timestamp_opt(started_at.seconds, started_at.nanos as u32)
+                                            .single()
+                                            .expect("ambiguous or nonexistent local time"),
+                                        None::<DateTime<Local>>,
                                         resource_target.clone(),
                                         resource_for_resource_id.clone(),
                                         self.database.applications_read().await.get(&app_id),

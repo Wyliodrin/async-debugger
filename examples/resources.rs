@@ -37,7 +37,6 @@ async fn main() {
         sleep(Duration::from_secs(3)).await;
     }
     println!("stressing cpu");
-    //burn_cpu_for(20);
     println!("press something to exit");
     io::stdin().read_line(&mut input).unwrap();
 }

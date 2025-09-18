@@ -413,15 +413,16 @@ impl Storage for Database {
         let async_ops_map = self.async_ops_read().await;
         let tasks_ops_map = self.tasks_ops_read().await;
 
-        let app = apps_map.get(&app_id).cloned();
-        if app.is_none() {
-            let _ = fs::remove_dir_all(&staging).await;
-            return Err(TraceError::PathNotFound(format!(
-                "Application {} not found",
-                app_id
-            )));
-        }
-        let app_arc = app.unwrap();
+        let app_arc = match apps_map.get(&app_id).cloned() {
+            Some(a) => a,
+            None => {
+                let _ = fs::remove_dir_all(&staging).await;
+                return Err(TraceError::PathNotFound(format!(
+                    "Application {} not found",
+                    app_id
+                )));
+            }
+        };
 
         let app_title = app_arc.title().to_string();
         let mut tasks_out: HashMap<String, Arc<Task>> = HashMap::new();

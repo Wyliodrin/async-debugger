@@ -5,6 +5,7 @@ use super::storable::Storable;
 use crate::error::Error as TraceError;
 use crate::mappers::read_file;
 use async_trait::async_trait;
+use chrono::{Date, DateTime, Local};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -21,24 +22,14 @@ pub(crate) struct AsyncOp {
     pub resource_target: Option<String>,
 }
 
-/// A timestamp with seconds and nanoseconds components.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub(crate) struct TimeStamp {
-    /// Whole seconds since UNIX epoch.
-    pub seconds: i64,
-
-    /// Nanosecond part of the timestamp (0–999_999_999).
-    pub nanos: i32,
-}
-
 /// Overview of CPU usage for a given operation slice.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub(crate) struct CPUOverview {
     /// When the CPU slice started (if known).
-    pub started_at: Option<TimeStamp>,
+    pub started_at: Option<DateTime<Local>>,
 
     /// When the CPU slice stopped (if known).
-    pub stopped_at: Option<TimeStamp>,
+    pub stopped_at: Option<DateTime<Local>>,
 
     /// Optional resource target associated with this CPU slice.
     pub resource_target: Option<String>,
@@ -104,6 +95,7 @@ impl Storable<HashMap<String, TaskOp>> for TaskOp {
 mod tests {
     use super::*;
     use crate::error::Error as TraceError;
+    use chrono::TimeZone;
     use serde_json::to_string_pretty;
     use std::collections::HashMap;
     use std::fs::{self, File};
@@ -182,14 +174,16 @@ mod tests {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join(TaskOp::FILE_EXTENSION);
 
-        let ts1 = TimeStamp {
-            seconds: 100,
-            nanos: 500,
-        };
-        let ts2 = TimeStamp {
-            seconds: 200,
-            nanos: 0,
-        };
+        let ts1: DateTime<Local> = Local
+            .timestamp_opt(100, 500)
+            .single()
+            .expect("ambiguous or nonexistent local time");
+
+        let ts2 = Local
+            .timestamp_opt(200, 0)
+            .single()
+            .expect("ambiguous or nonexistent local time");
+
         let cpu1 = CPUOverview {
             started_at: Some(ts1.clone()),
             stopped_at: Some(ts2.clone()),
@@ -230,7 +224,7 @@ mod tests {
         assert_eq!(got.task_name.as_deref(), Some("Alpha"));
         assert_eq!(got.task_color.as_deref(), Some("#fff"));
         assert_eq!(got.operations.len(), 2);
-        assert_eq!(got.operations[0].started_at.as_ref().unwrap().seconds, 100);
+        assert_eq!(got.operations[0].started_at, Option::from(Local.timestamp_opt(100, 0).single().unwrap()));
         assert_eq!(got.operations[1].resource_target, None);
     }
 

@@ -59,7 +59,7 @@ pub fn get_pid_hosting_at(url: Url) -> Option<u32> {
     {
         // Use netstat to list all TCP/UDP connections with PIDs.
         let output = Command::new("netstat").args(["-ano"]).output().ok()?;
-
+        // This needs to be lossy, because the netstat output sometimes contains non UTF-8 characters
         let stdout = String::from_utf8_lossy(&output.stdout);
 
         // Look for lines containing “:<port>”
@@ -107,9 +107,11 @@ pub fn get_process_start_time(pid: u32) -> Option<String> {
     None
 }
 
+/// This is used when the user renames an application
+///
 /// Renames keys in the given database guard by replacing the `old_title` prefix
 /// in keys with the `new_title` prefix. The function iterates over all keys,
-/// collects the keys that start with `old_title.`, and renames them accordingly.
+/// collects the keys that start with `old_title.`, and renames them accordiungly.
 ///
 /// # Arguments
 ///
@@ -141,6 +143,8 @@ pub fn rename_database_keys<T: Serialize + Debug>(
     }
 }
 
+/// This is used when the user renames an application
+///
 /// Renames keys in the given database guard by replacing the `old_title` prefix
 /// in keys with the `new_title` prefix. In addition, it updates the `app_name`
 /// attribute of the value associated with each renamed key.

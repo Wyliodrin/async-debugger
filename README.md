@@ -8,11 +8,25 @@ resources, and execution timelines in real time.
 
 ## Features
 
-- **Real-time task visualization**: See active, pending, and completed async tasks
+- **Real-time task visualization**: See active, pending and completed asynchronous tasks
 - **Resource usage inspection**: Monitor resources and CPU consumption and scheduling
 - **Polling overview**: Tap into polls and get insights
-- **Custom filtering**: Filter tasks by name, state, or metadata tags
+- **Custom filtering**: Filter tasks by name, state or metadata tags
+- **Resource overview**: Get an interactive insight into what, how and when were resources spawned
 
+<hr>
+
+## Requirements
+- **Supported operating systems**: 
+  - Linux
+  - macOS
+  - Windows
+
+
+- **Software prerequisites**: 
+  - npm (comes with Node.js) or yarn 
+  - git
+  - Rust Toolchain
 <hr>
 
 ## Installation

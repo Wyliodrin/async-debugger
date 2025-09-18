@@ -2,7 +2,7 @@
 //! implements `Storable` to read tasks from JSON.
 
 use super::storable::Storable;
-use crate::domain::{duration::Duration, has_app_name::HasAppName};
+use crate::domain::{has_app_name::HasAppName};
 use crate::error::Error as TraceError;
 use crate::mappers::read_file;
 use crate::warnings::TaskWarnings;
@@ -10,7 +10,8 @@ use async_trait::async_trait;
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::time::SystemTime;
+use std::str::FromStr;
+use std::time::{Duration, SystemTime};
 
 /// Lifecycle state of a task.
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -60,39 +61,37 @@ pub struct Task {
     pub size_bytes: Option<usize>,
     /// The original size of the future (before runtime auto-boxing)
     pub original_size_bytes: Option<usize>,
-
+    /// Task runtime statistics (wakes, polls, timestamps).
     pub stats: TaskStats,
-
+    /// Warnings related to the task (e.g. excessive polls, large future).
     pub warnings: TaskWarnings,
 }
 
+/// Per-task runtime counters and recent timestamps used for state inference.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TaskStats {
+    /// Number of times the task has been woken.
     pub wakes: u64,
-
+    /// Number of times the task's waker woke itself (i.e. wake_by_ref/self-wakes).
     pub self_wakes: u64,
-
+    /// Number of times the task's Waker was cloned.
     pub waker_clones: u64,
-
+    /// Number of times the task's Waker was dropped.
     pub waker_drops: u64,
-
+    /// Number of times the task has been polled.
     pub polls: u64,
-
+    /// Timestamp of the last wake (when the task was signalled).
     pub last_wake: Option<SystemTime>,
-
+    /// Timestamp when the last poll started.
     pub last_poll_started: Option<SystemTime>,
-
+    /// Timestamp when the last poll ended.
     pub last_poll_ended: Option<SystemTime>,
 }
 
 impl Task {
     /// Returns a composite string identifier `<app_name>.<id>`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `app_name` is `None`.
     pub fn id(&self) -> String {
-        format!("{}.{}", self.app_name.as_ref().unwrap(), self.id)
+        format!("{}.{}", self.app_name.as_ref().unwrap_or(&String::from("Missing app name for resource")), self.id)
     }
 
     pub(crate) fn wakes(&self) -> u64 {
@@ -147,10 +146,10 @@ impl Task {
         }
     }
 
-    pub(crate) fn busy(&self, since: SystemTime) -> std::time::Duration {
+    pub(crate) fn busy(&self, since: SystemTime) -> Duration {
         if let Some(busy_duration) = self.busy.clone() {
             let busy_time =
-                std::time::Duration::new(busy_duration.seconds as u64, busy_duration.nanos as u32);
+                Duration::new(busy_duration.as_secs(), busy_duration.as_nanos() as u32);
             if let Some(started) = self.stats.last_poll_started {
                 if self.stats.last_poll_started > self.stats.last_poll_ended {
                     // in this case the task is being polled at the moment
@@ -168,11 +167,18 @@ impl Task {
         self.stats.last_poll_started > self.stats.last_poll_ended
     }
 
+    /// Return true if the task is considered awakened (woken since last poll
+    /// or hasn't been polled yet).
     pub(crate) fn is_awakened(&self) -> bool {
-        // Before the first poll, the task is waiting on the executor to run it
-        // for the first time.
-        //self.total_polls() == 0 || self.stats.last_wake() > self.stats.last_poll_started
-        true
+        if self.stats.polls == 0 {
+            return true;
+        }
+        match (self.stats.last_wake, self.stats.last_poll_started) {
+            (Some(wake), Some(poll_start)) => wake > poll_start,
+            (Some(_wake), None) => true,
+            (None, Some(_)) => false,
+            (None, None) => self.stats.wakes > self.stats.polls,
+        }
     }
 
     pub(crate) fn is_starved(&self) -> bool {

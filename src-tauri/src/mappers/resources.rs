@@ -1,6 +1,6 @@
 //! Convert from `console_api::resources::Resource` to our domain `Resource`.
 
-use crate::domain::duration::Duration;
+use std::time::Duration;
 use crate::domain::resource::{Resource, ResourceStatus};
 use console_api::resources;
 use console_api::resources::resource::kind;
@@ -33,13 +33,12 @@ pub fn map_to_domain_resource(resource: &resources::Resource) -> Option<Resource
         if let Some(kind) = resource.kind.as_ref() {
             if let Some(kind_of_kind) = kind.kind.as_ref() {
                 match kind_of_kind {
-                    kind::Kind::Known(i) => Some(
-                        kind::Known::try_from(*i)
-                            .ok()
-                            .unwrap()
-                            .as_str_name()
-                            .to_string(),
-                    ),
+                    kind::Kind::Known(i) => {
+                        match kind::Known::try_from(*i) {
+                            Ok(k) => Some(k.as_str_name().to_string()),
+                            Err(_) => Some("unknown_kind".to_string()),
+                        }
+                    }
                     kind::Kind::Other(s) => Some(s.clone()),
                 }
             } else {

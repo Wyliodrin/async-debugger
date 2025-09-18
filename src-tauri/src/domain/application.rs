@@ -155,7 +155,7 @@ impl Application {
         }
     }
 
-    // I need this test here in order for the `state_manager::state::tests::test_handle_and_get_pid`
+    // This test is needed here in order for the `state_manager::state::tests::test_handle_and_get_pid`
     // test to work
     #[cfg(test)]
     pub fn new_mock(title: String, url: Url, pid: u32) -> Self {

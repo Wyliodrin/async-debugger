@@ -1,12 +1,13 @@
 //! Defines resources tracked in the trace domain and implements storage.
 
 use super::storable::Storable;
-use crate::domain::{duration::Duration, has_app_name::HasAppName};
+use crate::domain::{has_app_name::HasAppName};
 use crate::error::Error as TraceError;
 use crate::mappers::read_file;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::time::Duration;
 
 /// Possible lifecycle states of a traced resource.
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -40,12 +41,11 @@ pub(crate) struct Resource {
 
 impl Resource {
     /// Returns a string identifier combining `app_name` and `id`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `app_name` is `None`.
-    pub fn id(&self) -> String {
-        format!("{}.{}", self.app_name.as_ref().unwrap(), self.id)
+    pub fn id(&self) -> Result<String, String> {
+        match &self.app_name {
+            Some(name) => Ok(format!("{}.{}", name, self.id)),
+            None => Err(format!("missing app_name for resource id {}", self.id)),
+        }
     }
 }
 

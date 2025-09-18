@@ -26,7 +26,6 @@ pub async fn run() {
     // Load the shared application context: state manager plus channels for updates.
     let (state_manager, updates_receiver) = StateManager::new()
         .await
-        // TODO: decide whether to panic or degrade gracefully if setup fails
         .unwrap_or_else(|err| panic!("Cannot start application due to {err:?}"));
 
     // Wrap state manager in an Arc for safe sharing across tasks.
