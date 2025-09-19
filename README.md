@@ -14,6 +14,7 @@ resources, and execution timelines in real time.
 - **Custom filtering**: Filter tasks by name, state or metadata tags
 - **Resource overview**: Get an interactive insight into what, how and when were resources spawned
 
+[Architecture](Architecture.md)
 <hr>
 
 ## Requirements
