@@ -4,6 +4,10 @@ AsyncDebugger is a desktop tool that provides **meaningful insights** into async
 the `console-api` developed for `tokio-console`. It offers a clean, intuitive user interface to inspect tasks,
 resources, and execution timelines in real time.
 
+![Applications Overview](pictures/app.png)
+![Tasks Overview](pictures/tasks.png)
+![Resources Overview](pictures/resources.png)
+![Polls Overview](pictures/polls.png)
 <hr>
 
 ## Features
@@ -35,7 +39,7 @@ resources, and execution timelines in real time.
 1. Clone the repository
    ```bash
    git clone https://github.com/Wyliodrin/async-debugger.git
-   cd AsyncDebugger
+   cd async-debugger
    ```
 2. Install front-end dependencies
    ```bash
