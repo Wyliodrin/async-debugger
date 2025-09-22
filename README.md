@@ -56,6 +56,7 @@ resources, and execution timelines in real time.
 
 1. Launch AsyncDebugger via `npm run tauri dev`.
 2. Attach to one of our examples or your own Rust async application by using the Application Overview page in the UI
+![how-to.gif](pictures/how-to.gif)
     - For your application, enable the console API by adding `console-subscriber` to your Cargo.toml and instrumenting
       your code:
 
