@@ -47,6 +47,26 @@ const filteredResources = computed(() => {
       })
 });
 
+function toNumber(x) {
+  if (x === null || x === undefined) return undefined;
+  if (typeof x === 'number') return x;
+  if (typeof x === 'string' && x.trim() !== '') {
+    const n = Number(x);
+    return Number.isNaN(n) ? undefined : n;
+  }
+  return undefined;
+}
+
+function formatDuration(v) {
+  if (v == null) return '';
+  if (typeof v === 'string') return v;
+  const secs = toNumber(v.secs ?? v.seconds ?? v.Secs) ?? 0;
+  const nanos = toNumber(v.nanos ?? v.nanos ?? v.Nanos ?? v.Nano) ?? 0;
+  if (secs === undefined) return String(v);
+  const ms = secs * 1000 + Math.floor(nanos / 1e6);
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
+}
+
 listen<any[]>('update:resources', e => {
   dataStore.handleResourceUpdate(e);
 })
@@ -101,6 +121,10 @@ listen<any[]>('update:resources', e => {
 
         <template #item.location="{ item }">
           <span v-html="item.location"></span>
+        </template>
+
+        <template #item.duration="{ item }">
+          <span>{{ formatDuration(item.duration) }}</span>
         </template>
       </v-data-table>
     </v-card-text>

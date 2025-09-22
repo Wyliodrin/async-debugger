@@ -5,6 +5,7 @@ use super::storable::Storable;
 use crate::error::Error as TraceError;
 use crate::mappers::read_file;
 use async_trait::async_trait;
+use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 
 /// A single poll (event) captured by the tracing system.
@@ -29,7 +30,7 @@ pub(crate) struct Poll {
     /// Optional source code location string.
     pub location: Option<String>,
     /// Optional timestamp when this poll was received.
-    pub received_at: Option<String>,
+    pub received_at: Option<DateTime<Local>>,
 }
 
 #[async_trait]

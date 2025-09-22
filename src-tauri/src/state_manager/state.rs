@@ -415,10 +415,6 @@ impl State {
                                         nanos = nanos - busy_duration.as_nanos();
                                     }
                                 }
-                                while nanos < 0 {
-                                    seconds -= 1;
-                                    nanos += 1000000000;
-                                }
                                 Some(Duration::new(seconds, nanos as u32))
                             }
                             None => None,
@@ -428,26 +424,14 @@ impl State {
 
                     // Format created_at timestamp if not yet set
                     if task.created_at.is_none() {
-                        let created_ts = updated_task
-                            .created_at
-                            .as_ref()
-                            .expect("we just tested is_some()");
-                        let dt_local: DateTime<Local> = Local
-                            .timestamp_opt(created_ts.seconds, created_ts.nanos as u32)
-                            .single()
-                            .expect("timestamp invalid");
+                        if let Some(created_ts) = updated_task.created_at.as_ref() {
+                            let dt_local: DateTime<Local> = Local
+                                .timestamp_opt(created_ts.seconds, created_ts.nanos as u32)
+                                .single()
+                                .expect("invalid timestamp");
 
-                        let pretty = format!(
-                            r#"<div class="timestamp-chips">
-                                <span class="timestamp-chip timestamp-chip--date">{}</span>
-                                <span class="timestamp-chip timestamp-chip--time">{}:<span class="timestamp-chip--seconds">{}</span><span class="timestamp-chip--ms">.{}</span></span>
-                            </div>"#,
-                            dt_local.format("%d/%m/%y"),
-                            dt_local.format("%H:%M"),
-                            dt_local.format("%S"),
-                            dt_local.format("%f")
-                        );
-                        task.created_at = Some(pretty);
+                            task.created_at = Some(dt_local);
+                        }
                     }
 
                     task.stats.last_wake = updated_task.last_wake.map(|v| v.try_into().unwrap());
@@ -681,7 +665,7 @@ impl State {
         &self,
         app_id: Uuid,
         resources_update: ResourceUpdate,
-        received_at: Option<String>,
+        received_at: Option<DateTime<Local>>,
     ) {
         // debug for missed resources_updates
         if resources_update.dropped_events > 0 {
@@ -925,7 +909,6 @@ impl State {
                 let location = resource_opt
                     .as_ref()
                     .and_then(|res| res.location.clone());
-                println!("location is {:?}", location);
 
                 let pid = app_opt.as_ref().and_then(|a| Option::from(a.pid));
 

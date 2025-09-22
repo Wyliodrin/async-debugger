@@ -5,7 +5,7 @@ use super::storable::Storable;
 use crate::error::Error as TraceError;
 use crate::mappers::read_file;
 use async_trait::async_trait;
-use chrono::{Date, DateTime, Local};
+use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

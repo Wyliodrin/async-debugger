@@ -123,17 +123,7 @@ impl StateManager {
                                             .timestamp_opt(received_update_time.seconds, received_update_time.nanos as u32)
                                             .single()
                                             .expect("timestamp invalid");
-                                        let pretty = format!(
-                                            r#"<div class="timestamp-chips">
-                                                    <span class="timestamp-chip timestamp-chip--date">{}</span>
-                                                    <span class="timestamp-chip timestamp-chip--time">{}:<span class="timestamp-chip--seconds">{}</span><span class="timestamp-chip--ms">.{}</span></span>
-                                                </div>"#,
-                                            dt_local.format("%d/%m/%y"),
-                                            dt_local.format("%H:%M"),
-                                            dt_local.format("%S"),
-                                            dt_local.format("%f")
-                                        );
-                                        Some(pretty)
+                                        Some(dt_local)
                                     } else {
                                         None
                                     }

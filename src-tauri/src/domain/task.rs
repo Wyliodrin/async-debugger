@@ -10,7 +10,6 @@ use async_trait::async_trait;
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
 /// Lifecycle state of a task.
@@ -56,7 +55,7 @@ pub struct Task {
     /// Optional source location.
     pub location: Option<String>,
     /// Optional creation timestamp.
-    pub created_at: Option<String>,
+    pub created_at: Option<DateTime<Local>>,
     /// The size of the future driving the task
     pub size_bytes: Option<usize>,
     /// The original size of the future (before runtime auto-boxing)

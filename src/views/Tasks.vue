@@ -4,6 +4,7 @@ import {listen} from '@tauri-apps/api/event'
 import type {DataTableHeader} from 'vuetify'
 import {useDataStore} from '@/stores/data'
 import {Task, TaskWarnings} from '@/types/tasks'
+import moment from "moment"
 
 const tasksSearch = ref('')
 const selectedApp = ref('All')
@@ -162,6 +163,32 @@ function rowClass(item: any) {
   return item?.state === 'Starved' ? 'row-starved' : ''
 }
 
+function formatCreatedAt(value: any) {
+  if (!value) return '';
+  const m = moment(value);
+  if (!m.isValid()) return value;
+  return m.format('DD.MM.YYYY HH:mm:ss');
+}
+
+function toNumber(x) {
+  if (x === null || x === undefined) return undefined;
+  if (typeof x === 'number') return x;
+  if (typeof x === 'string' && x.trim() !== '') {
+    const n = Number(x);
+    return Number.isNaN(n) ? undefined : n;
+  }
+  return undefined;
+}
+
+function formatDuration(v) {
+  if (v == null) return '';
+  if (typeof v === 'string') return v;
+  const secs = toNumber(v.secs ?? v.seconds ?? v.Secs) ?? 0;
+  const nanos = toNumber(v.nanos ?? v.nanos ?? v.Nanos ?? v.Nano) ?? 0;
+  if (secs === undefined) return String(v);
+  const ms = secs * 1000 + Math.floor(nanos / 1e6);
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
+}
 
 listen<any[]>('update:tasks', e => {
   dataStore.handleTaskUpdate(e);
@@ -310,7 +337,23 @@ listen<any[]>('update:tasks', e => {
         </template>
 
         <template #item.created_at="{ item }">
-          <span v-html="item.created_at"></span>
+          <span>{{formatCreatedAt(item.created_at)}}</span>
+        </template>
+
+        <template #item.runtime="{ item }">
+          <span>{{ formatDuration(item.runtime) }}</span>
+        </template>
+
+        <template #item.scheduled="{ item }">
+          <span>{{ formatDuration(item.scheduled) }}</span>
+        </template>
+
+        <template #item.idle="{ item }">
+          <span>{{ formatDuration(item.idle) }}</span>
+        </template>
+
+        <template #item.busy="{ item }">
+          <span>{{ formatDuration(item.busy) }}</span>
         </template>
 
         <template #item.location="{ item }">

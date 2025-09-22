@@ -18,10 +18,10 @@ export const useDataStore = defineStore('data', () => {
         if (pause.value == false) {
             tasks.value = e.payload.map(t => {
             const formatted = {
-                runtime:   t.runtime.formatted,
-                scheduled: t.scheduled.formatted,
-                idle:      t.idle.formatted,
-                busy:      t.busy.formatted,
+                runtime:   t.runtime,
+                scheduled: t.scheduled,
+                idle:      t.idle,
+                busy:      t.busy,
             }
 
             let stateKey: string
@@ -60,7 +60,7 @@ export const useDataStore = defineStore('data', () => {
             resources.value = e.payload.map(r => {
                 return {
                 ...r,
-                duration: r.duration.formatted
+                duration: r.duration
                 }
             })
         }
