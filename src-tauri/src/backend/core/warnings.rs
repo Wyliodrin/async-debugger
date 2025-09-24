@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::domain::Task;
+use crate::backend::domain::Task;
 use std::{
     fmt::Debug,
     time::{Duration, SystemTime},

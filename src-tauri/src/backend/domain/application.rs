@@ -1,13 +1,16 @@
-use super::storable::Storable;
-use crate::common::{get_pid_hosting_at, get_process_start_time};
-use crate::error::Error as TraceError;
-use crate::mappers::read_file;
-use crate::state_manager::connection_manager::{Command, Connection};
+use crate::backend::core::connection_manager::Command;
+use crate::backend::core::connection_manager::Connection;
+use crate::backend::domain::storable::Storable;
+use crate::backend::mappers::read_file;
+use crate::utils::common::get_pid_hosting_at;
+use crate::utils::common::get_process_start_time;
+use crate::utils::error::Error as TraceError;
 use async_trait::async_trait;
 use log::debug;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashMap;
-use tauri::Url;
+use url::Url;
 use uuid::Uuid;
 
 /// Whether an application is currently enabled (connected)
@@ -190,7 +193,7 @@ impl Storable<HashMap<Uuid, Application>> for Application {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state_manager::connection_manager::Command;
+    use crate::core::connection_manager::Command;
     use serde_json::to_string_pretty;
     use std::collections::HashMap;
     use std::fs;

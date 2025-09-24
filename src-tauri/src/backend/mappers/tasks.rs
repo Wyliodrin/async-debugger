@@ -1,8 +1,8 @@
 //! Convert from `console_api::tasks::Task` to our domain `Task`.
 
 use super::{read_field_value_string, read_field_value_u64, read_field_value_usize};
-use crate::domain::{Task, TaskState, TaskStats};
-use crate::warnings::TaskWarnings;
+use crate::backend::core::warnings::TaskWarnings;
+use crate::backend::domain::{Task, TaskState, TaskStats};
 use console_api::tasks;
 use console_api::tasks::task::Kind;
 use uuid::Uuid;

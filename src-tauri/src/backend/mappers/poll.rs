@@ -1,6 +1,6 @@
 //! Convert from `console_api::resources::PollOp` to our domain `Poll`.
 
-use crate::domain::poll::Poll;
+use crate::backend::domain::poll::Poll;
 use console_api::resources::PollOp;
 
 /// Map fields from the upstream PollOp into our `Poll`.

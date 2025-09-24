@@ -2,8 +2,8 @@
 //! loading from JSON.
 
 use super::storable::Storable;
-use crate::error::Error as TraceError;
-use crate::mappers::read_file;
+use crate::backend::mappers::read_file;
+use crate::utils::error::Error as TraceError;
 use async_trait::async_trait;
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};

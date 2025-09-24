@@ -1,13 +1,8 @@
-pub mod commands;
-mod common;
-mod domain;
-mod error;
-mod infra;
-mod mappers;
-mod state_manager;
-mod warnings;
+pub mod backend;
+pub mod features;
+pub mod utils;
 
-use state_manager::StateManager;
+use backend::core::StateManager;
 use std::{sync::Arc, time::Duration};
 use tauri::{async_runtime, Manager};
 use tokio::{task, time::sleep};
@@ -75,19 +70,19 @@ pub async fn run() {
         // Register our custom command handlers for IPC invocations from the UI.
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
-            commands::applications::applications_add,
-            commands::applications::delete_application,
-            commands::applications::disable_app,
-            commands::applications::enable_app,
-            commands::applications::edit_application,
-            commands::applications::update_app_pid,
-            commands::applications::get_app_pid,
-            commands::applications::export_app_instance,
-            commands::applications::list_exports,
-            commands::applications::list_app_timestamps,
-            commands::applications::import_from_export_folder,
-            commands::tasks::remove_task,
-            commands::tasks::edit_task,
+            features::applications::applications_add,
+            features::applications::delete_application,
+            features::applications::disable_app,
+            features::applications::enable_app,
+            features::applications::edit_application,
+            features::applications::update_app_pid,
+            features::applications::get_app_pid,
+            features::applications::export_app_instance,
+            features::applications::list_exports,
+            features::applications::list_app_timestamps,
+            features::applications::import_from_export_folder,
+            features::tasks::remove_task,
+            features::tasks::edit_task,
         ])
         // Launch the Tauri event loop with our generated context.
         .run(tauri::generate_context!())

@@ -1,6 +1,6 @@
 //! Convert from `console_api::resources::Resource` to our domain `Resource`.
 
-use crate::domain::resource::{Resource, ResourceStatus};
+use crate::backend::domain::resource::{Resource, ResourceStatus};
 use console_api::resources;
 use console_api::resources::resource::kind;
 use std::time::Duration;
