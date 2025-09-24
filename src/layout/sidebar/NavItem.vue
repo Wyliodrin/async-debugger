@@ -1,8 +1,3 @@
-<script setup>
-import Icon from './Icon.vue';
-const props = defineProps({ item: Object, level: Number });
-</script>
-
 <template>
     <v-list-item :to="item.to" rounded class="mb-1">
         <template v-slot:prepend >
@@ -11,3 +6,25 @@ const props = defineProps({ item: Object, level: Number });
         <v-list-item-title>{{ item.title }}</v-list-item-title>
     </v-list-item>
 </template>
+
+<script lang="ts">
+import { defineComponent } from "vue";
+import Icon from "./Icon.vue";
+
+export default defineComponent({
+  name: "NavItem",
+  components: {
+    Icon,
+  },
+  props: {
+    item: {
+      type: Object,
+      required: true,
+    },
+    level: {
+      type: Number,
+      required: true,
+    },
+  },
+});
+</script>

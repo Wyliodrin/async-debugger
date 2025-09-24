@@ -1,0 +1,47 @@
+name: vue-checker
+on:
+  pull_request:
+  push:
+    branches:
+      - "main"
+
+jobs:
+  changes:
+    runs-on: ubuntu-22.04
+    # Required permissions
+    permissions: read-all
+    outputs:
+      source : ${{ steps.filter.outputs.source }}
+      workflow : ${{ steps.filter.outputs.workflow }}
+    steps:
+    # For pull requests it's not necessary to checkout the code
+    - uses: actions/checkout@v3
+    - uses: integrated-food-solutions/paths-filter@master
+      id: filter
+      with:
+        filters: |
+            source: src/**
+            workflow: .github/workflows/vue-checker.yml
+  vue-checker:
+    runs-on: ubuntu-22.04
+    needs: changes
+    if: |
+      needs.changes.outputs.source == 'true' ||
+      needs.changes.outputs.workflow == 'true'
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '20'
+
+      - name: Installing packages
+        run: |
+          npm install
+
+      - name: Format
+        run: |
+          npm run lint-check
+
+      - name: Build
+        run: |
+          npm run build

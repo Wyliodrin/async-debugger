@@ -1,0 +1,8 @@
+'Workflow':
+- .github/workflows/**
+
+'UI':
+- src/**
+
+'Backend':
+- src-tauri/**

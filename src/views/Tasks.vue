@@ -1,200 +1,3 @@
-<script setup lang="ts">
-import {computed, ref, Ref} from 'vue'
-import {listen} from '@tauri-apps/api/event'
-import type {DataTableHeader} from 'vuetify'
-import {useDataStore} from '@/stores/data'
-import {Task, TaskWarnings} from '@/types/tasks'
-import moment from "moment"
-
-const tasksSearch = ref('')
-const selectedApp = ref('All')
-const dataStore = useDataStore();
-const dialog = ref(false);
-
-const appList = computed(() => {
-  const names = dataStore.tasks.map(t => t.app_name)
-  const unique = Array.from(new Set(names)).sort()
-  return ['All', ...unique]
-})
-
-const filteredTasks = computed(() => {
-  return dataStore.tasks
-      .filter(t => selectedApp.value === 'All' || t.app_name === selectedApp.value)
-      .filter(t => {
-        const q = tasksSearch.value.toLowerCase()
-        return (
-            t.app_name.toLowerCase().includes(q) ||
-            t.name.toLowerCase().includes(q) ||
-            t.id.toString().includes(q) ||
-            t.tid.toString().includes(q)
-        )
-      })
-})
-
-const taskHeaders = ref<DataTableHeader[]>([
-  {title: 'App Name', key: 'app_name', align: 'center'},
-  {title: 'ID', key: 'id', align: 'center'},
-  {title: 'TID', key: 'tid', align: 'center'},
-  {title: 'Name', key: 'name', align: 'center'},
-  {title: 'Type', key: 'kind', align: 'center'},
-  {title: 'State', key: 'state', align: 'center'},
-  {title: 'Spawned Time', key: 'created_at', align: 'center'},
-  {title: 'Runtime', key: 'runtime', align: 'center'},
-  {title: 'Scheduled', key: 'scheduled', align: 'center'},
-  {title: 'Idle', key: 'idle', align: 'center'},
-  {title: 'Busy', key: 'busy', align: 'center'},
-  {title: 'Location', key: 'location', align: 'center'},
-])
-
-function getTaskChipColor(stateOrKind: string) {
-  switch (stateOrKind) {
-    case 'Running':
-      return 'green'
-    case 'Stopped':
-      return 'red'
-    case 'Starved':
-      return 'purple'
-    case 'SPAWN':
-      return 'blue'
-    case 'BLOCKING':
-      return 'orange'
-    default:
-      return 'grey'
-  }
-}
-
-const editedItem: Ref<{
-  app_name: string,
-  id: any;
-  name: any;
-  color: string,
-  warnings: TaskWarnings
-}> = ref({
-  app_name: '',
-  id: '',
-  name: '',
-  color: '',
-  warnings: {
-    self_wake_percent: {
-      enabled: true,
-      parameter: 50,
-      description: '',
-    },
-    lost_waker: {
-      enabled: true,
-    },
-    never_yielded: {
-      enabled: true,
-      parameter: 1,
-      description: '',
-    },
-    auto_boxed_feature: {
-      enabled: true,
-    },
-    large_feature: {
-      enabled: true,
-      parameter: 1024,
-      description: '',
-    }
-  },
-});
-
-const defaultItem: Ref<{
-  app_name: string,
-  id: any;
-  name: any;
-  color: string,
-  warnings: TaskWarnings
-}> = ref({
-  app_name: '',
-  id: '',
-  name: '',
-  color: '',
-  warnings: {
-    self_wake_percent: {
-      enabled: true,
-      parameter: 50,
-      description: '',
-    },
-    lost_waker: {
-      enabled: true,
-    },
-    never_yielded: {
-      enabled: true,
-      parameter: 1,
-      description: '',
-    },
-    auto_boxed_feature: {
-      enabled: true,
-    },
-    large_feature: {
-      enabled: true,
-      parameter: 1024,
-      description: '',
-    }
-  },
-});
-
-function close() {
-  dialog.value = false;
-
-  editedItem.value = Object.assign({}, defaultItem.value);
-}
-
-async function save() {
-  dialog.value = false;
-  dataStore.editTask(editedItem.value.id, editedItem.value.name, editedItem.value.color, editedItem.value.app_name, editedItem.value.warnings);
-  close();
-}
-
-function editTask(task: Task) {
-  const {id, name, app_name, warnings} = task;
-
-  editedItem.value.id = id;
-  editedItem.value.app_name = app_name;
-  editedItem.value.name = name;
-  editedItem.value.warnings = warnings;
-
-  dialog.value = true;
-
-}
-
-function rowClass(item: any) {
-  return item?.state === 'Starved' ? 'row-starved' : ''
-}
-
-function formatCreatedAt(value: any) {
-  if (!value) return '';
-  const m = moment(value);
-  if (!m.isValid()) return value;
-  return m.format('DD.MM.YYYY HH:mm:ss');
-}
-
-function toNumber(x) {
-  if (x === null || x === undefined) return undefined;
-  if (typeof x === 'number') return x;
-  if (typeof x === 'string' && x.trim() !== '') {
-    const n = Number(x);
-    return Number.isNaN(n) ? undefined : n;
-  }
-  return undefined;
-}
-
-function formatDuration(v) {
-  if (v == null) return '';
-  if (typeof v === 'string') return v;
-  const secs = toNumber(v.secs ?? v.seconds ?? v.Secs) ?? 0;
-  const nanos = toNumber(v.nanos ?? v.nanos ?? v.Nanos ?? v.Nano) ?? 0;
-  if (secs === undefined) return String(v);
-  const ms = secs * 1000 + Math.floor(nanos / 1e6);
-  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
-}
-
-listen<any[]>('update:tasks', e => {
-  dataStore.handleTaskUpdate(e);
-})
-</script>
-
 <template>
   <v-card elevation="2">
     <v-dialog v-model="dialog" max-width="500" persistent>
@@ -378,6 +181,181 @@ listen<any[]>('update:tasks', e => {
     </v-card-text>
   </v-card>
 </template>
+
+<script lang="ts">
+import { defineComponent } from "vue";
+import type { DataTableHeader } from "vuetify";
+import moment from "moment";
+import { useDataStore } from "@/stores/data";
+import type { Task, TaskWarnings } from "@/types/tasks";
+
+export default defineComponent({
+  name: "Tasks",
+  data() {
+    const dataStore = useDataStore();
+
+    return {
+      // stores
+      dataStore,
+
+      // ui state
+      tasksSearch: "" as string,
+      selectedApp: "All" as string,
+      dialog: false as boolean,
+
+      // table headers
+      taskHeaders: [
+        { title: "App Name", key: "app_name", align: "center" },
+        { title: "ID", key: "id", align: "center" },
+        { title: "TID", key: "tid", align: "center" },
+        { title: "Name", key: "name", align: "center" },
+        { title: "Type", key: "kind", align: "center" },
+        { title: "State", key: "state", align: "center" },
+        { title: "Spawned Time", key: "created_at", align: "center" },
+        { title: "Runtime", key: "runtime", align: "center" },
+        { title: "Scheduled", key: "scheduled", align: "center" },
+        { title: "Idle", key: "idle", align: "center" },
+        { title: "Busy", key: "busy", align: "center" },
+        { title: "Location", key: "location", align: "center" },
+      ] as DataTableHeader[],
+
+      // edit dialog models
+      editedItem: {
+        app_name: "",
+        id: 0,
+        name: "",
+        color: "",
+        warnings: {
+          self_wake_percent: { enabled: true, parameter: 50, description: "" },
+          lost_waker: { enabled: true },
+          never_yielded: { enabled: true, parameter: 1, description: "" },
+          auto_boxed_feature: { enabled: true },
+          large_feature: { enabled: true, parameter: 1024, description: "" },
+        } as TaskWarnings,
+      },
+
+      defaultItem: {
+        app_name: "",
+        id: 0,
+        name: "",
+        color: "",
+        warnings: {
+          self_wake_percent: { enabled: true, parameter: 50, description: "" },
+          lost_waker: { enabled: true },
+          never_yielded: { enabled: true, parameter: 1, description: "" },
+          auto_boxed_feature: { enabled: true },
+          large_feature: { enabled: true, parameter: 1024, description: "" },
+        } as TaskWarnings,
+      },
+    };
+  },
+
+  computed: {
+    appList(): string[] {
+      const names = this.dataStore.tasks.map((t) => t.app_name);
+      const unique = Array.from(new Set(names)).sort();
+      return ["All", ...unique];
+    },
+
+    filteredTasks(): any[] {
+      const q = this.tasksSearch.toLowerCase();
+
+      return this.dataStore.tasks
+        .filter(
+          (t) => this.selectedApp === "All" || t.app_name === this.selectedApp
+        )
+        .filter((t) => {
+          return (
+            t.app_name.toLowerCase().includes(q) ||
+            t.name.toLowerCase().includes(q) ||
+            t.id.toString().includes(q) ||
+            t.tid.toString().includes(q)
+          );
+        });
+    },
+  },
+
+  methods: {
+    getTaskChipColor(stateOrKind: string) {
+      switch (stateOrKind) {
+        case "Running":
+          return "green";
+        case "Stopped":
+          return "red";
+        case "Starved":
+          return "purple";
+        case "SPAWN":
+          return "blue";
+        case "BLOCKING":
+          return "orange";
+        default:
+          return "grey";
+      }
+    },
+
+    close() {
+      this.dialog = false;
+      this.editedItem = Object.assign({}, this.defaultItem);
+    },
+
+    async save() {
+      this.dialog = false;
+      this.dataStore.editTask(
+        this.editedItem.id,
+        this.editedItem.name,
+        this.editedItem.color,
+        this.editedItem.app_name,
+        this.editedItem.warnings
+      );
+      this.close();
+    },
+
+    editTask(task: Task) {
+      const { id, name, app_name, warnings } = task;
+      this.editedItem.id = id;
+      this.editedItem.app_name = app_name;
+      this.editedItem.name = name;
+      this.editedItem.warnings = warnings;
+      this.dialog = true;
+    },
+
+    rowClass(item: any) {
+      return item?.state === "Starved" ? "row-starved" : "";
+    },
+
+    formatCreatedAt(value: any) {
+      if (!value) return "";
+      const m = moment(value);
+      if (!m.isValid()) return value;
+      return m.format("DD.MM.YYYY HH:mm:ss");
+    },
+
+    toNumber(x: unknown): number | undefined {
+      if (x === null || x === undefined) return undefined;
+      if (typeof x === "number") return x;
+      if (typeof x === "string" && x.trim() !== "") {
+        const n = Number(x);
+        return Number.isNaN(n) ? undefined : n;
+      }
+      return undefined;
+    },
+
+    formatDuration(v: any) {
+      if (v == null) return "";
+      if (typeof v === "string") return v;
+      const secs =
+        this.toNumber(v.secs ?? v.seconds ?? v.Secs) ?? 0;
+      const nanos =
+        this.toNumber(v.nanos ?? v.Nanos ?? v.Nano) ?? 0;
+      if (secs === undefined) return String(v);
+      const ms = secs * 1000 + Math.floor(nanos / 1e6);
+      return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
+    },
+  },
+});
+</script>
+
+
 
 <style scoped>
 .search-container {

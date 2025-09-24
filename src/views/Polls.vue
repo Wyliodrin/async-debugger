@@ -1,49 +1,3 @@
-<script setup lang="ts">
-import {useDataStore} from '@/stores/data';
-import {listen} from '@tauri-apps/api/event';
-import {computed, ref} from 'vue';
-import {DataTableHeader} from 'vuetify';
-
-const pollsSearch = ref('');
-const selectedApp = ref('All');
-const dataStore = useDataStore();
-
-const pollsHeaders = ref<DataTableHeader[]>([
-  {title: "Received at", key: "received_at", align: "center"},
-  {title: "Poll Type", key: "poll_type", align: "center"},
-  {title: "Resource Name", key: "resource_name", align: "center"},
-  {title: "Task", key: "task_name", align: "center"},
-  {title: "Status", key: "is_ready", align: "center"},
-  {title: "Location", key: "location", align: "center"},
-]);
-
-const appList = computed(() => {
-  const names = dataStore.polls.map(p => p.app_name)
-  const unique = Array.from(new Set(names)).sort()
-  return ['All', ...unique]
-})
-
-const filteredPolls = computed(() => {
-  return dataStore.polls
-      .filter(p => selectedApp.value === 'All' || p.app_name === selectedApp.value)
-      .filter(p => {
-        const q = pollsSearch.value.toLowerCase()
-        return (
-            p.poll_type.toLowerCase().includes(q) ||
-            p.resource_id.toString().includes(q) ||
-            p.resource_name.toString().includes(q) ||
-            p.task_id.toString().includes(q) ||
-            p.task_name.toString().includes(q) ||
-            p.location.toLowerCase().includes(q)
-        )
-      })
-});
-
-listen<any[]>('update:polls', e => {
-  dataStore.handlePollUpdate(e);
-})
-</script>
-
 <template>
   <v-card elevation="2">
     <v-card-text>
@@ -137,3 +91,57 @@ listen<any[]>('update:polls', e => {
     </v-card-text>
   </v-card>
 </template>
+
+<script lang="ts">
+import { defineComponent } from "vue";
+import type { DataTableHeader } from "vuetify";
+import { useDataStore } from "@/stores/data";
+
+export default defineComponent({
+  name: "Polls",
+  data() {
+    const dataStore = useDataStore();
+
+    return {
+      dataStore,
+      pollsSearch: "" as string,
+      selectedApp: "All" as string,
+      pollsHeaders: [
+        { title: "Received at", key: "received_at", align: "center" },
+        { title: "Poll Type", key: "poll_type", align: "center" },
+        { title: "Resource Name", key: "resource_name", align: "center" },
+        { title: "Task", key: "task_name", align: "center" },
+        { title: "Status", key: "is_ready", align: "center" },
+        { title: "Location", key: "location", align: "center" },
+      ] as DataTableHeader[],
+    };
+  },
+
+  computed: {
+    appList(): string[] {
+      const names = this.dataStore.polls.map((p) => p.app_name);
+      const unique = Array.from(new Set(names)).sort();
+      return ["All", ...unique];
+    },
+
+    filteredPolls(): any[] {
+      const q = this.pollsSearch.toLowerCase();
+
+      return this.dataStore.polls
+        .filter(
+          (p) => this.selectedApp === "All" || p.app_name === this.selectedApp
+        )
+        .filter((p) => {
+          return (
+            p.poll_type.toLowerCase().includes(q) ||
+            p.resource_id.toString().includes(q) ||
+            p.resource_name.toString().includes(q) ||
+            p.task_id.toString().includes(q) ||
+            p.task_name.toString().includes(q) ||
+            p.location.toLowerCase().includes(q)
+          );
+        });
+    },
+  },
+});
+</script>
