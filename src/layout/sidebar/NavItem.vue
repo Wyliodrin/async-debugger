@@ -1,7 +1,7 @@
 <template>
     <v-list-item :to="item.to" rounded class="mb-1">
         <template v-slot:prepend >
-            <Icon :item="item.icon" :level="level" class="mr-2"/>
+            <SidebarIcon :item="item.icon" :level="level" class="mr-2"/>
         </template>
         <v-list-item-title>{{ item.title }}</v-list-item-title>
     </v-list-item>
@@ -9,12 +9,12 @@
 
 <script lang="ts">
 import { defineComponent } from "vue";
-import Icon from "./Icon.vue";
+import SidebarIcon from "./Icon.vue";
 
 export default defineComponent({
   name: "NavItem",
   components: {
-    Icon,
+    SidebarIcon,
   },
   props: {
     item: {

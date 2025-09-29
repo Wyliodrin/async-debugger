@@ -34,7 +34,7 @@
           :items="filteredResources"
           :item-value="item => `${item.app_name}-${item.id}`"
       >
-        <template #item.status="{ item }">
+        <template v-slot:[`item.status`]="{ item }">
           <v-chip
               :color="getResourceChipColor(item.status)"
               size="small"
@@ -44,11 +44,11 @@
           </v-chip>
         </template>
 
-        <template #item.location="{ item }">
+        <template v-slot:[`item.location`]="{ item }">
           <span v-html="item.location"></span>
         </template>
 
-        <template #item.duration="{ item }">
+        <template v-slot:[`item.duration`]="{ item }">
           <span>{{ formatDuration(item.duration) }}</span>
         </template>
       </v-data-table>
@@ -60,9 +60,10 @@
 import { defineComponent } from "vue";
 import type { DataTableHeader } from "vuetify";
 import { useDataStore } from "@/stores/data";
+import type { Resource } from "@/types/resources";
 
 export default defineComponent({
-  name: "Resources",
+  name: "ResourcesOverview",
   data() {
     const dataStore = useDataStore();
 
@@ -90,7 +91,7 @@ export default defineComponent({
       return ["All", ...unique];
     },
 
-    filteredResources(): any[] {
+    filteredResources(): Resource[] {
       const q = this.resourcesSearch.toLowerCase();
 
       return this.dataStore.resources
@@ -128,15 +129,20 @@ export default defineComponent({
       return undefined;
     },
 
-    formatDuration(v: any) {
+    formatDuration(v: unknown): string {
       if (v == null) return "";
       if (typeof v === "string") return v;
-      const secs = this.toNumber(v.secs ?? v.seconds ?? v.Secs) ?? 0;
-      const nanos = this.toNumber(v.nanos ?? v.Nanos ?? v.Nano) ?? 0;
-      if (secs === undefined) return String(v);
+
+      const d = v as {
+        secs?: number; seconds?: number; Secs?: number;
+        nanos?: number; Nanos?: number; Nano?: number;
+      };
+
+      const secs = this.toNumber(d.secs ?? d.seconds ?? d.Secs) ?? 0;
+      const nanos = this.toNumber(d.nanos ?? d.Nanos ?? d.Nano) ?? 0;
       const ms = secs * 1000 + Math.floor(nanos / 1e6);
       return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
-    },
+    }
   },
 });
 </script>

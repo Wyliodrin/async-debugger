@@ -120,7 +120,7 @@
           :item-class="rowClass"
       >
 
-        <template #item.kind="{ item }">
+        <template #[`item.kind`]="{ item }">
           <v-chip
               :color="getTaskChipColor(item.kind)"
               size="small"
@@ -130,7 +130,7 @@
           </v-chip>
         </template>
 
-        <template #item.state="{ item }">
+        <template #[`item.state`]="{ item }">
           <v-chip
               :color="getTaskChipColor(item.state)"
               size="small"
@@ -139,31 +139,31 @@
           </v-chip>
         </template>
 
-        <template #item.created_at="{ item }">
+        <template #[`item.created_at`]="{ item }">
           <span>{{formatCreatedAt(item.created_at)}}</span>
         </template>
 
-        <template #item.runtime="{ item }">
+        <template #[`item.runtime`]="{ item }">
           <span>{{ formatDuration(item.runtime) }}</span>
         </template>
 
-        <template #item.scheduled="{ item }">
+        <template #[`item.scheduled`]="{ item }">
           <span>{{ formatDuration(item.scheduled) }}</span>
         </template>
 
-        <template #item.idle="{ item }">
+        <template #[`item.idle`]="{ item }">
           <span>{{ formatDuration(item.idle) }}</span>
         </template>
 
-        <template #item.busy="{ item }">
+        <template #[`item.busy`]="{ item }">
           <span>{{ formatDuration(item.busy) }}</span>
         </template>
 
-        <template #item.location="{ item }">
+        <template #[`item.location`]="{ item }">
           <span v-html="item.location"></span>
         </template>
 
-        <template #item.name="{ item }">
+        <template #[`item.name`]="{ item }">
           <v-chip
               :color="item.color ? item.color : 'gray'"
               size="small">
@@ -190,7 +190,7 @@ import { useDataStore } from "@/stores/data";
 import type { Task, TaskWarnings } from "@/types/tasks";
 
 export default defineComponent({
-  name: "Tasks",
+  name: "TasksOverview",
   data() {
     const dataStore = useDataStore();
 
@@ -257,7 +257,7 @@ export default defineComponent({
       return ["All", ...unique];
     },
 
-    filteredTasks(): any[] {
+    filteredTasks(): Task[] {
       const q = this.tasksSearch.toLowerCase();
 
       return this.dataStore.tasks
@@ -319,11 +319,11 @@ export default defineComponent({
       this.dialog = true;
     },
 
-    rowClass(item: any) {
+    rowClass(item: Task) {
       return item?.state === "Starved" ? "row-starved" : "";
     },
 
-    formatCreatedAt(value: any) {
+    formatCreatedAt(value: string) {
       if (!value) return "";
       const m = moment(value);
       if (!m.isValid()) return value;
@@ -340,17 +340,20 @@ export default defineComponent({
       return undefined;
     },
 
-    formatDuration(v: any) {
+    formatDuration(v: unknown): string {
       if (v == null) return "";
       if (typeof v === "string") return v;
-      const secs =
-        this.toNumber(v.secs ?? v.seconds ?? v.Secs) ?? 0;
-      const nanos =
-        this.toNumber(v.nanos ?? v.Nanos ?? v.Nano) ?? 0;
-      if (secs === undefined) return String(v);
+
+      const d = v as {
+        secs?: number; seconds?: number; Secs?: number;
+        nanos?: number; Nanos?: number; Nano?: number;
+      };
+
+      const secs = this.toNumber(d.secs ?? d.seconds ?? d.Secs) ?? 0;
+      const nanos = this.toNumber(d.nanos ?? d.Nanos ?? d.Nano) ?? 0;
       const ms = secs * 1000 + Math.floor(nanos / 1e6);
       return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
-    },
+    }
   },
 });
 </script>

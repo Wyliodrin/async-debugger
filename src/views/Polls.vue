@@ -33,7 +33,7 @@
           :headers="pollsHeaders"
           :items="filteredPolls"
       >
-        <template #item.is_ready="{ item }">
+       <template v-slot:[`item.is_ready`]="{ item }">
           <v-chip
               :color="item.is_ready ? 'green' : 'red'"
               size="small"
@@ -43,11 +43,11 @@
           </v-chip>
         </template>
 
-        <template #item.received_at="{ item }">
+        <template v-slot:[`item.received_at`]="{ item }">
           <span v-html="item.received_at"></span>
         </template>
 
-        <template #item.resource_name="{ item }">
+        <template v-slot:[`item.resource_name`]="{ item }">
           <v-tooltip location="bottom">
             <template #activator="{ props }">
               <span v-bind="props">
@@ -58,7 +58,7 @@
           </v-tooltip>
         </template>
 
-        <template #item.location="{ item }">
+        <template v-slot:[`item.location`]="{ item }">
           <v-chip
               v-if="item.location === 'Unknown'"
               color="grey"
@@ -73,7 +73,7 @@
           ></span>
         </template>
 
-        <template #item.task_name="{ item }">
+        <template v-slot:[`item.task_name`]="{ item }">
           <v-tooltip location="bottom">
             <template #activator="{ props }">
               <v-chip
@@ -96,9 +96,10 @@
 import { defineComponent } from "vue";
 import type { DataTableHeader } from "vuetify";
 import { useDataStore } from "@/stores/data";
+import type { Poll } from "@/types/polls";
 
 export default defineComponent({
-  name: "Polls",
+  name: "PollsOverview",
   data() {
     const dataStore = useDataStore();
 
@@ -124,7 +125,7 @@ export default defineComponent({
       return ["All", ...unique];
     },
 
-    filteredPolls(): any[] {
+    filteredPolls(): Poll[] {
       const q = this.pollsSearch.toLowerCase();
 
       return this.dataStore.polls

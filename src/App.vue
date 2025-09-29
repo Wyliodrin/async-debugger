@@ -11,6 +11,9 @@ import { defineComponent, onMounted, onBeforeUnmount } from "vue";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useDataStore } from "@/stores/data";
 import { useApplicationStore } from "@/stores/application";
+import type { Task } from "@/types/tasks";
+import type { Resource } from "@/types/resources";
+import type { Poll } from "@/types/polls";
 
 export default defineComponent({
   name: "AppShell",
@@ -36,7 +39,7 @@ export default defineComponent({
 
     onMounted(async () => {
       // global spacebar toggle (unless typing)
-      window.addEventListener("keydown", onKeydown as EventListener, { passive: false });
+      window.addEventListener("keydown", onKeydown, { passive: false });
 
       // pid updates
       const unlistenPid = await listen<{ id: string; pid: number }>("update:pid", (evt) => {
@@ -46,27 +49,23 @@ export default defineComponent({
       });
 
       // task updates
-      const unlistenTasks = await listen<any[]>("update:tasks", (evt) => {
-        dataStore.handleTaskUpdate(evt);
-      });
+      const unlistenTasks = await listen("update:tasks", (evt: { payload: Task[] }) => dataStore.handleTaskUpdate(evt));
 
       // resources updates
-      const unlistenResources = await listen<any[]>('update:resources', e => {
-        dataStore.handleResourceUpdate(e);
-      });
+      const unlistenResources = await listen("update:resources", (evt: { payload: Resource[] }) => dataStore.handleResourceUpdate(evt));
 
       // polls updates
-      const unlistenPolls = await listen<any[]>('update:polls', e => {
-        dataStore.handlePollUpdate(e);
-      });
+      const unlistenPolls = await listen("update:polls", (evt: { payload: Poll[] }) => dataStore.handlePollUpdate(evt));
 
       unlisteners.push(unlistenPid, unlistenTasks, unlistenResources, unlistenPolls);
     });
 
     onBeforeUnmount(() => {
-      window.removeEventListener("keydown", onKeydown as EventListener);
+      window.removeEventListener("keydown", onKeydown);
       unlisteners.forEach((fn) => {
-        try { fn(); } catch {}
+        try { fn(); } catch (err) {
+          console.log("unlisten failed: ", err);
+        }
       });
     });
 

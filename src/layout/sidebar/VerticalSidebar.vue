@@ -1,9 +1,11 @@
 <template>
     <v-navigation-drawer v-model="drawer" location="left" temporary>
         <v-list class="py-5 px-4 bg-muted">
-            <template v-for="item in sidebarMenu">
-                <NavItem :item="item" />
-            </template>
+          <NavItem
+            v-for="item in sidebarMenu"
+            :key="item.to"
+            :item="item"
+          />
         </v-list>
     </v-navigation-drawer>
 </template>

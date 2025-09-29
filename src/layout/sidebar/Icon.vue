@@ -11,7 +11,7 @@
 import { defineComponent } from "vue";
 
 export default defineComponent({
-  name: "Icon",
+  name: " SidebarIcon",
   props: {
     item: {
       type: Object,
