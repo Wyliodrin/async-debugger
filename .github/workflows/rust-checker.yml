@@ -64,6 +64,14 @@ jobs:
           sudo apt install libsdl2-dev
           echo "Installing libsdl2-ttf-dev..."
           sudo apt install libsdl2-ttf-dev
+          echo "Installing libsoup-3.0-dev..."
+          sudo apt install libsoup-3.0-dev
+          echo "Installing javascriptcoregtk-4.1..."
+          sudo apt install libjavascriptcoregtk-4.1-0 \
+            libjavascriptcoregtk-4.1-dev\
+            gir1.2-javascriptcoregtk-4.1
+          echo "Installing webkit2gtk-4.1..."
+          sudo apt-get install webkit2gtk-4.1
 
       - name: Create dist directory
         run: |
