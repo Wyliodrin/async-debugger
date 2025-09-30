@@ -174,7 +174,7 @@ impl Database {
 
         //Load all polls
         let polls: Vec<Arc<Poll>> = match Poll::load_all(storage_folder.clone()).await {
-            Ok(polls) => polls.into_iter().map(|poll| Arc::new(poll)).collect(),
+            Ok(polls) => polls.into_iter().map(Arc::new).collect(),
             Err(error) => match error {
                 TraceError::PathNotFound(_) => {
                     debug!("Polls file not found, using empty list");
@@ -354,10 +354,10 @@ impl Storage for Database {
         title: String,
         comment: String,
     ) -> Result<PathBuf, TraceError> {
-        let title = title;
         let comment = comment.trim().to_string();
         let apps_map = self.applications_read().await;
-        let app_arc = apps_map.values()
+        let app_arc = apps_map
+            .values()
             .find(|a| a.title == title)
             .cloned()
             .ok_or_else(|| TraceError::PathNotFound(format!("Application {} not found", title)))?;
@@ -387,7 +387,7 @@ impl Storage for Database {
                 path: staging.to_string_lossy().to_string(),
             })?;
 
-        let safe_comment = if comment.len() > 0 {
+        let safe_comment = if !comment.is_empty() {
             comment.replace('\0', "").replace("\r\n", "\n")
         } else {
             String::new()
@@ -413,7 +413,7 @@ impl Storage for Database {
         let async_ops_map = self.async_ops_read().await;
         let tasks_ops_map = self.tasks_ops_read().await;
 
-        let app_arc = match apps_map.get(&app_id).cloned() {
+        let app_arc = match apps_map.get(app_id).cloned() {
             Some(a) => a,
             None => {
                 let _ = fs::remove_dir_all(&staging).await;
@@ -465,8 +465,7 @@ impl Storage for Database {
         }
 
         let mut tasks_ops_out: HashMap<String, Arc<TaskOp>> = HashMap::new();
-        let exported_task_ids: HashSet<u64> =
-            tasks_out.values().filter_map(|t| Some(t.id)).collect();
+        let exported_task_ids: HashSet<u64> = tasks_out.values().map(|t| t.id).collect();
 
         for (k, v) in tasks_ops_map.into_iter() {
             if exported_task_ids.contains(&v.task_id) {
@@ -477,7 +476,7 @@ impl Storage for Database {
         {
             let mut apps_json: HashMap<String, Application> = HashMap::new();
             apps_json.insert(app_arc.id().to_string(), (*Arc::clone(&app_arc)).clone());
-            let out = serde_json::to_vec_pretty(&apps_json).map_err(|e| TraceError::Serde(e))?;
+            let out = serde_json::to_vec_pretty(&apps_json).map_err(TraceError::Serde)?;
             let mut f = fs::File::create(staging.join("applications.json"))
                 .await
                 .map_err(|e| TraceError::CannotCreateStorage {
@@ -497,7 +496,7 @@ impl Storage for Database {
             for (k, v) in tasks_out.into_iter() {
                 tasks_json.insert(k, (*Arc::clone(&v)).clone());
             }
-            let out = serde_json::to_vec_pretty(&tasks_json).map_err(|e| TraceError::Serde(e))?;
+            let out = serde_json::to_vec_pretty(&tasks_json).map_err(TraceError::Serde)?;
             let mut f = fs::File::create(staging.join("tasks.json"))
                 .await
                 .map_err(|e| TraceError::CannotCreateStorage {
@@ -517,8 +516,7 @@ impl Storage for Database {
             for (k, v) in resources_out.into_iter() {
                 resources_json.insert(k, (*Arc::clone(&v)).clone());
             }
-            let out =
-                serde_json::to_vec_pretty(&resources_json).map_err(|e| TraceError::Serde(e))?;
+            let out = serde_json::to_vec_pretty(&resources_json).map_err(TraceError::Serde)?;
             let mut f = fs::File::create(staging.join("resources.json"))
                 .await
                 .map_err(|e| TraceError::CannotCreateStorage {
@@ -538,8 +536,7 @@ impl Storage for Database {
                 .into_iter()
                 .map(|p| (*Arc::clone(&p)).clone())
                 .collect();
-            let out =
-                serde_json::to_vec_pretty(&polls_vec_owned).map_err(|e| TraceError::Serde(e))?;
+            let out = serde_json::to_vec_pretty(&polls_vec_owned).map_err(TraceError::Serde)?;
             let mut f = fs::File::create(staging.join("polls.json"))
                 .await
                 .map_err(|e| TraceError::CannotCreateStorage {
@@ -559,8 +556,7 @@ impl Storage for Database {
             for (k, v) in async_ops_out.into_iter() {
                 async_ops_json.insert(k, (*Arc::clone(&v)).clone());
             }
-            let out =
-                serde_json::to_vec_pretty(&async_ops_json).map_err(|e| TraceError::Serde(e))?;
+            let out = serde_json::to_vec_pretty(&async_ops_json).map_err(TraceError::Serde)?;
             let mut f = fs::File::create(staging.join("async_ops.json"))
                 .await
                 .map_err(|e| TraceError::CannotCreateStorage {
@@ -580,8 +576,7 @@ impl Storage for Database {
             for (k, v) in tasks_ops_out.into_iter() {
                 tasks_ops_json.insert(k, (*Arc::clone(&v)).clone());
             }
-            let out =
-                serde_json::to_vec_pretty(&tasks_ops_json).map_err(|e| TraceError::Serde(e))?;
+            let out = serde_json::to_vec_pretty(&tasks_ops_json).map_err(TraceError::Serde)?;
             let mut f = fs::File::create(staging.join("tasks_ops.json"))
                 .await
                 .map_err(|e| TraceError::CannotCreateStorage {
@@ -606,7 +601,7 @@ impl Storage for Database {
 
         {
             let mut apps_guard = self.applications.write().await;
-            apps_guard.remove(&app_id);
+            apps_guard.remove(app_id);
         }
 
         {
@@ -668,10 +663,9 @@ impl Storage for Database {
                 .map_err(|e| format!("applications.json parse error: {}", e))?;
             let mut guard = self.applications_write().await;
             for (k, v) in apps_map.into_iter() {
-               if let Ok(id) = uuid::Uuid::parse_str(&k) {
+                if let Ok(id) = uuid::Uuid::parse_str(&k) {
                     guard.insert(id, std::sync::Arc::new(v));
-                } else {
-                   }
+                }
             }
             drop(guard);
         }

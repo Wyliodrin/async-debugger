@@ -1,7 +1,7 @@
 //! Defines resources tracked in the trace domain and implements storage.
 
 use super::storable::Storable;
-use crate::domain::{has_app_name::HasAppName};
+use crate::domain::has_app_name::HasAppName;
 use crate::error::Error as TraceError;
 use crate::mappers::read_file;
 use async_trait::async_trait;

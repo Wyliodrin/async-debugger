@@ -257,7 +257,7 @@ pub async fn list_app_timestamps(
         let meta = entry.file_type().await.map_err(|e| e.to_string())?;
         if meta.is_dir() {
             let ts_name = entry.file_name().to_string_lossy().to_string();
-           let comment_path = app_folder.join(&ts_name).join("comment.txt");
+            let comment_path = app_folder.join(&ts_name).join("comment.txt");
             let comment_preview = match fs::read_to_string(&comment_path).await {
                 Ok(s) => {
                     let s = s.trim().to_string();
