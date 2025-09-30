@@ -5,6 +5,7 @@
             v-for="item in sidebarMenu"
             :key="item.to"
             :item="item"
+            :level="0"
           />
         </v-list>
     </v-navigation-drawer>
