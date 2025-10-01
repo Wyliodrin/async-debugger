@@ -97,7 +97,8 @@ pub fn get_process_start_time(pid: u32) -> Option<String> {
     // Look up the process by PID.
     if let Some(process) = sys.process(Pid::from_u32(pid)) {
         // Convert the process start time (seconds since epoch) into a formatted string.
-        let date: String = DateTime::from_timestamp(process.start_time() as i64, 0)?.with_timezone(&local)
+        let date: String = DateTime::from_timestamp(process.start_time() as i64, 0)?
+            .with_timezone(&local)
             .format("%d/%m/%Y %H:%M:%S")
             .to_string();
         return Some(date);
@@ -116,7 +117,7 @@ pub fn get_process_start_time(pid: u32) -> Option<String> {
 /// # Arguments
 ///
 /// * `guard` - A mutable reference to a writable database guard holding a `HashMap`
-///             where keys are strings and values are of generic type `T`.
+///   where keys are strings and values are of generic type `T`.
 /// * `new_title` - The new title string to replace the old title prefix in keys.
 /// * `old_title` - The old title string prefix to be replaced in keys.
 ///
@@ -155,14 +156,14 @@ pub fn rename_database_keys<T: Serialize + Debug>(
 /// # Arguments
 ///
 /// * `guard` - A mutable reference to a writable database guard holding a `HashMap`
-///             where keys are strings and values are `Arc` wrapped generic type `T`.
+///   where keys are strings and values are `Arc` wrapped generic type `T`.
 /// * `new_title` - The new title string to replace the old title prefix in keys.
 /// * `old_title` - The old title string prefix to be replaced in keys.
 ///
 /// # Type Parameters
 ///
 /// * `T` - The type of the values inside the Arc in the hashmap. Must implement
-///         `Serialize`, `Debug`, `HasAppName` (a trait providing `set_app_name`), and `Clone`.
+///   Implements `Serialize`, `Debug`, `HasAppName` (a trait providing `set_app_name`), and `Clone`.
 pub fn rename_database_keys_and_app_name<T: Serialize + Debug + HasAppName + Clone>(
     guard: &mut WriteableDataBaseGuard<'_, HashMap<String, Arc<T>>>,
     new_title: String,

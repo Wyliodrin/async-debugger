@@ -1,12 +1,3 @@
-<script setup lang="ts">
-import { useLayoutStore } from '@/stores/layout';
-import VerticalSidebar from './sidebar/VerticalSidebar.vue';
-import VerticalHeader from './header/VerticalHeader.vue';
-
-const layoutStore = useLayoutStore();
-
-</script>
-
 <template>
     <v-app>
         <VerticalHeader />
@@ -20,3 +11,23 @@ const layoutStore = useLayoutStore();
         </v-main>
     </v-app>
 </template>
+
+<script lang="ts">
+import { defineComponent } from "vue";
+import { useLayoutStore } from "@/stores/layout";
+import VerticalSidebar from "./sidebar/VerticalSidebar.vue";
+import VerticalHeader from "./header/VerticalHeader.vue";
+
+export default defineComponent({
+  name: "AppLayout",
+  components: {
+    VerticalSidebar,
+    VerticalHeader,
+  },
+  data() {
+    return {
+      layoutStore: useLayoutStore(),
+    };
+  },
+});
+</script>

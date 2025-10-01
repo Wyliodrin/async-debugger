@@ -36,6 +36,7 @@ pub enum Command {
 }
 
 /// Events emitted by the connection manager for each application.
+#[allow(clippy::large_enum_variant)]
 #[non_exhaustive]
 pub enum Event {
     /// Connection is in progress.
@@ -156,7 +157,7 @@ impl ConnectionManager {
         }
 
         // Spawn the background task
-        let cloned_id = id.clone();
+        let cloned_id = id;
         let connection_task = tokio::task::spawn(async move {
             let mut sys = sysinfo::System::new_all();
             sys.refresh_all();
@@ -171,20 +172,17 @@ impl ConnectionManager {
                 info!("Connecting to application with url {}", url);
 
                 // Connect the app
-                let connection = 'connect: loop {
-                    select! {
-                        connection = Self::connect_to_app(&url) => {
-                            // m-am conectat, astept comenzi mai jos
-                            debug!("Received connection result");
-                            break 'connect connection;
+                let connection = select! {
+                    res = Self::connect_to_app(&url) => {
+                        debug!("Received connection result");
+                        res
+                    }
+                    command = command_receiver.recv() => {
+                        debug!("Received command: {:?}", command);
+                        match command {
+                            Some(Command::Disconnect) | None => break 'connection,
                         }
-                        command = command_receiver.recv() => {
-                            debug!("Received command: {:?}", command);
-                            match command {
-                                Some(Command::Disconnect) | None => break 'connection
-                            }
-                        }
-                    };
+                    }
                 };
 
                 // Vad daca primesc comenzi pt aplicatie (gen disconnect/disable)
@@ -249,8 +247,7 @@ impl ConnectionManager {
                                         Self::check_app_stats(&mut sys, pid).await
                                         } {
                                         updates_sender.send((cloned_id, Event::ApplicationUpdated(app_update))).await.ok();
-                                    } else {
-                                        if let Some(new_pid) = get_pid_hosting_at(url.clone()){
+                                    } else if let Some(new_pid) = get_pid_hosting_at(url.clone()){
                                             if new_pid != pid {
                                                 pid = new_pid;
                                                 updates_sender.send((cloned_id, Event::PidChanged(new_pid))).await.ok();
@@ -262,7 +259,6 @@ impl ConnectionManager {
                                         else {
                                             updates_sender.send((cloned_id, Event::Error(TraceError::CannotReadProcessInfo { pid }))).await.ok();
                                         }
-                                    }
                                 }
                             }
                         }
@@ -295,7 +291,7 @@ impl ConnectionManager {
             .write()
             .await
             .insert(id, connection_task);
-        return Ok(connection);
+        Ok(connection)
     }
 
     /// Forcefully remove the connection task for the given `uuid`.

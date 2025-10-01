@@ -41,7 +41,7 @@ export const useApplicationStore = defineStore('applications', () => {
         const indexOfApp = applications.value.findIndex(item => item.id === app.id);
         if (indexOfApp == -1) return;
 
-        let appToEdit = applications.value[indexOfApp];
+        const appToEdit = applications.value[indexOfApp];
         if (appToEdit) {
             appToEdit.connection_status = "Connecting";
             await invoke('edit_application', {uuid: app.id, appTitle: app.title, appUrl: app.url, oldTitle: appToEdit.title}).then(

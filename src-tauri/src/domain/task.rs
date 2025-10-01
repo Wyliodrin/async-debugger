@@ -2,7 +2,7 @@
 //! implements `Storable` to read tasks from JSON.
 
 use super::storable::Storable;
-use crate::domain::{has_app_name::HasAppName};
+use crate::domain::has_app_name::HasAppName;
 use crate::error::Error as TraceError;
 use crate::mappers::read_file;
 use crate::warnings::TaskWarnings;
@@ -90,7 +90,13 @@ pub struct TaskStats {
 impl Task {
     /// Returns a composite string identifier `<app_name>.<id>`.
     pub fn id(&self) -> String {
-        format!("{}.{}", self.app_name.as_ref().unwrap_or(&String::from("Missing app name for resource")), self.id)
+        format!(
+            "{}.{}",
+            self.app_name
+                .as_ref()
+                .unwrap_or(&String::from("Missing app name for resource")),
+            self.id
+        )
     }
 
     pub(crate) fn wakes(&self) -> u64 {
@@ -121,7 +127,7 @@ impl Task {
     }
 
     pub(crate) fn check_warnings(&self) -> Vec<String> {
-        self.warnings.check(&self)
+        self.warnings.check(self)
     }
 
     pub(crate) fn is_blocking(&self) -> bool {
@@ -146,9 +152,8 @@ impl Task {
     }
 
     pub(crate) fn busy(&self, since: SystemTime) -> Duration {
-        if let Some(busy_duration) = self.busy.clone() {
-            let busy_time =
-                Duration::new(busy_duration.as_secs(), busy_duration.as_nanos() as u32);
+        if let Some(busy_duration) = self.busy {
+            let busy_time = Duration::new(busy_duration.as_secs(), busy_duration.as_nanos() as u32);
             if let Some(started) = self.stats.last_poll_started {
                 if self.stats.last_poll_started > self.stats.last_poll_ended {
                     // in this case the task is being polled at the moment

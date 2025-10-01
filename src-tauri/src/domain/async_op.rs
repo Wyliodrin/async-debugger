@@ -224,7 +224,10 @@ mod tests {
         assert_eq!(got.task_name.as_deref(), Some("Alpha"));
         assert_eq!(got.task_color.as_deref(), Some("#fff"));
         assert_eq!(got.operations.len(), 2);
-        assert_eq!(got.operations[0].started_at, Option::from(Local.timestamp_opt(100, 0).single().unwrap()));
+        assert_eq!(
+            got.operations[0].started_at,
+            Option::from(Local.timestamp_opt(100, 0).single().unwrap())
+        );
         assert_eq!(got.operations[1].resource_target, None);
     }
 

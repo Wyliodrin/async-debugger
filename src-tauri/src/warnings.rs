@@ -157,7 +157,7 @@ impl Warn<Task> for SelfWakePercent {
         let task_name;
 
         if let Some(name) = option_task_name {
-            if name != "" {
+            if !name.is_empty() {
                 task_name = name;
             } else {
                 task_name = task.id();
@@ -273,7 +273,7 @@ impl Warn<Task> for NeverYielded {
             return Warning::Warn;
         }
 
-        return Warning::Ok;
+        Warning::Ok
     }
 
     fn format(&self, task: &Task) -> String {

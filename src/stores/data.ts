@@ -14,7 +14,7 @@ export const useDataStore = defineStore('data', () => {
 
     const tasks= ref<Task[]>([]);
 
-    function handleTaskUpdate(e: {payload: any[]}) {
+    function handleTaskUpdate(e: {payload: Task[]}) {
         if (pause.value == false) {
             tasks.value = e.payload.map(t => {
             const formatted = {
@@ -55,7 +55,7 @@ export const useDataStore = defineStore('data', () => {
 
     const resources = ref<Resource[]>([]);
 
-    function handleResourceUpdate(e: {payload: any[]}) {
+    function handleResourceUpdate(e: {payload: Resource[]}) {
         if (pause.value == false) {
             resources.value = e.payload.map(r => {
                 return {
@@ -68,7 +68,7 @@ export const useDataStore = defineStore('data', () => {
 
     const polls = ref<Poll[]>([]);
     
-    function handlePollUpdate(e: {payload: any[]}) {
+    function handlePollUpdate(e: {payload: Poll[]}) {
         if (pause.value == false) {
             polls.value = e.payload.map(p => {
                 return {

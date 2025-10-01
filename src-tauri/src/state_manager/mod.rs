@@ -199,7 +199,7 @@ impl StateManager {
     pub async fn add_application(&self, title: String, url: Url) -> Result<Uuid, TraceError> {
         // Create and enable application
         let mut application = Application::new(title, url)?;
-        let app_id = application.id().clone();
+        let app_id = *application.id();
 
         // Connect to the app
         let connection = self
