@@ -12,7 +12,7 @@
 //! - async_ops    → `<storage_folder>/async_ops.json`  
 //! - tasks_ops    → `<storage_folder>/tasks_ops.json`  
 use crate::{
-    domain::{
+    backend::domain::{
         application::Application,
         async_op::{AsyncOp, TaskOp},
         poll::Poll,
@@ -20,8 +20,8 @@ use crate::{
         storable::Storable,
         Task,
     },
-    error::Error as TraceError,
-    infra::{guard::WriteableDataBaseGuard, storage::Storage},
+    backend::infra::{guard::WriteableDataBaseGuard, storage::Storage},
+    utils::error::Error as TraceError,
 };
 use async_trait::async_trait;
 use chrono::Local;

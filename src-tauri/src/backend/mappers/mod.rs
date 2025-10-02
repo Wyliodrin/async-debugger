@@ -6,7 +6,7 @@ pub(crate) mod poll;
 pub(crate) mod resources;
 pub(crate) mod tasks;
 
-use crate::error::Error as TraceError;
+use crate::utils::error::Error as TraceError;
 use console_api::{
     field::{Name, Value},
     tasks::Task as ConsoleTask,

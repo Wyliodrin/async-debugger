@@ -12,11 +12,12 @@
 pub mod connection_manager;
 mod database;
 pub mod state;
+pub mod warnings;
 
-use crate::domain::application::{Application, ConnectionStatus};
-use crate::error::Error as TraceError;
-use crate::state_manager::connection_manager::Connection;
-use crate::state_manager::state::State;
+use crate::backend::core::connection_manager::Connection;
+use crate::backend::core::state::State;
+use crate::backend::domain::application::{Application, ConnectionStatus};
+use crate::utils::error::Error as TraceError;
 use anyhow::Result;
 use chrono::{DateTime, Local, TimeZone};
 use connection_manager::{ConnectionManager, Event};

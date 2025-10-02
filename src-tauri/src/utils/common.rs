@@ -6,8 +6,8 @@ use std::{collections::HashMap, process::Command};
 use sysinfo::{Pid, System};
 use url::Url;
 
-use crate::domain::has_app_name::HasAppName;
-use crate::infra::guard::WriteableDataBaseGuard;
+use crate::backend::domain::has_app_name::HasAppName;
+use crate::backend::infra::guard::WriteableDataBaseGuard;
 
 /// Returns the PID of the process listening on the given URL’s port, if any.
 ///

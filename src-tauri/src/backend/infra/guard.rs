@@ -2,7 +2,7 @@
 //! A guard that auto‐writes a database file on drop. Useful for
 //! synchronized, writeable access to in‐memory data.
 
-use crate::error::Error as TraceError;
+use crate::utils::error::Error as TraceError;
 use log::{error, info};
 use serde::Serialize;
 use std::{

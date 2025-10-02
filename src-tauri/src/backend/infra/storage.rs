@@ -1,7 +1,7 @@
 //! Defines the `Storage` trait to unify reads/writes of all domain data.
 
 use super::guard::WriteableDataBaseGuard;
-use crate::domain::{
+use crate::backend::domain::{
     application::Application,
     async_op::{AsyncOp, TaskOp},
     poll::Poll,
@@ -68,5 +68,5 @@ pub(crate) trait Storage: Send + Sync {
         &self,
         app_id: String,
         user_name: String,
-    ) -> Result<PathBuf, crate::error::Error>;
+    ) -> Result<PathBuf, crate::utils::error::Error>;
 }

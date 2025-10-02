@@ -1,6 +1,6 @@
-use crate::error::Error;
-use crate::state_manager::connection_manager::Connection;
-use crate::state_manager::StateManager;
+use crate::backend::core::connection_manager::Connection;
+use crate::backend::core::StateManager;
+use crate::utils::error::Error;
 use log::info;
 use serde::{Deserialize, Serialize};
 use std::path::Path;

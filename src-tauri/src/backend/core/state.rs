@@ -1,17 +1,19 @@
 use super::connection_manager::{AppUpdate, Connection};
 use super::database::Database;
-use crate::common::{get_pid_hosting_at, rename_database_keys, rename_database_keys_and_app_name};
-use crate::domain::application::{ApplicationState, ConnectionStatus};
-use crate::domain::async_op::{CPUOverview, TaskOp};
-use crate::domain::resource::ResourceStatus;
-use crate::domain::TaskState;
-use crate::error::Error as TraceError;
-use crate::infra::guard::DataBaseWrite;
-use crate::infra::storage::Storage;
-use crate::warnings::TaskWarnings;
+use crate::backend::core::warnings::TaskWarnings;
+use crate::backend::domain::application::{ApplicationState, ConnectionStatus};
+use crate::backend::domain::async_op::{CPUOverview, TaskOp};
+use crate::backend::domain::resource::ResourceStatus;
+use crate::backend::domain::TaskState;
+use crate::backend::infra::guard::DataBaseWrite;
+use crate::backend::infra::storage::Storage;
+use crate::utils::common::{
+    get_pid_hosting_at, rename_database_keys, rename_database_keys_and_app_name,
+};
+use crate::utils::error::Error as TraceError;
 use crate::{
-    domain::{application::Application, poll::Poll, resource::Resource, Task},
-    mappers::{
+    backend::domain::{application::Application, poll::Poll, resource::Resource, Task},
+    backend::mappers::{
         async_ops::map_to_domain_async_op, poll::map_to_domain_poll,
         resources::map_to_domain_resource, tasks::map_to_domain_task,
     },

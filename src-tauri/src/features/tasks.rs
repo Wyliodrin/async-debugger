@@ -1,6 +1,6 @@
-use crate::error::Error;
-use crate::state_manager::StateManager;
-use crate::warnings::TaskWarnings;
+use crate::backend::core::warnings::TaskWarnings;
+use crate::backend::core::StateManager;
+use crate::utils::error::Error;
 use std::sync::Arc;
 use tauri::State;
 

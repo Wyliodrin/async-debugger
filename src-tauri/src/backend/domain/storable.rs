@@ -1,6 +1,6 @@
 //! A generic trait for loading domain data from disk.
 
-use crate::error::Error as TraceError;
+use crate::utils::error::Error as TraceError;
 use async_trait::async_trait;
 
 /// A type that can be loaded from a JSON file named `<TYPE::FILE_EXTENSION>`.

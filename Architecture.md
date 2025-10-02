@@ -72,27 +72,38 @@ The user adds an app using the UI ─> commands/applications.rs/add_application 
 │   ├── .gitignore
 │   ├── icons -> App icons for various platforms/sizes
 │   └── src
-│       ├── commands -> **commands that can be called by the front-end component.**
-│       │   ├── applications.rs
-│       │   └── tasks.rs
-│       ├── common.rs -> Shared helpers and types used across backend
-│       ├── domain -> Domain models and business logic
-│       ├── error.rs -> Error types and handling utilities
-│       ├── infra -> Infrastructure/OS adapters and platform-specific code
-│       │   ├── guard.rs -> A guard that auto-writes a database file on drop
-│       │   └── storage.rs -> Defines the `Storage` trait to unify reads/writes of all domain data.
-│       ├── lib.rs -> Backend library entry (shared logic)
-│       ├── main.rs -> Tauri bootstrap (registers commands, initializes app)
-│       ├── mappers -> Converters between console_api types and our domain type
-│       │   ├── async_ops.rs -> maps asyncronous operations
-│       │   ├── poll.rs -> maps polls
-│       │   ├── resource.rs -> maps resources
-│       │   └── tasks.rs -> maps tasks
-│       ├── state_manager -> In-memory or persistent state utilities
-│       │   ├── connection_manager.rs -> Connection manager for remote applications
-│       │   ├── database.rs -> Persistent, in-memory database backed by disk storage
-│       │   └── state.rs -> Manages access to persistent storage and provides high-level methods
-│       └── warnings.rs -> Warning definitions/emitters
+|        ├─ main.rs                         // Tauri bootstrap (registers commands, initializes app)
+|        ├─ lib.rs                          // backend library entry (shared logic)
+|        ├─ features/                       // user-facing commands, handlers(in commands only the callbacks, not implementation)
+|        │  ├─ mod.rs
+|        │  ├─ applications/
+|        │  │  ├─ mod.rs
+|        │  │  └─ commands.rs
+|        │  └─ tasks/
+|        │     ├─ mod.rs
+|        │     └─ commands.rs
+|        ├─ backend/                        // business logic, state, adapters, background ops
+|        │  ├─ mod.rs
+|        │  ├─ domain/      		        // all structs
+|        │  ├─ infra/      	                // Infrastructure/OS adapters and platform-specific code
+|        │  │  ├─ storage.rs		        // Defines the `Storage` trait to unify reads/writes of all domain data.
+|        │  │  ├─ guards.rs                 // A guard that auto-writes a database file on drop
+|        │  ├─ state/                       // state manager & DB
+|        │  │  ├─ mod.rs
+|        │  │  ├─ connection_manager.rs     // Connection manager for remote applications
+|        │  │  ├─ database.rs               // Persistent, in-memory database backed by disk storage
+|        │  │  └─ state.rs                  // Manages access to persistent storage and provides high-level methods
+|        │  └─ mappers/                     // Converters between console_api types and our domain type
+|        │     ├─ mod.rs
+|        │     ├─ async_ops.rs
+|        │     ├─ poll.rs
+|        │     ├─ resource.rs
+|        │     └─ tasks.rs
+|        └─ utils/                      // helpers, errors, shared types
+|           ├─ mod.rs
+|           ├─ common.rs
+|           ├─ error.rs
+|           └─ warnings.rs
 │   └── tauri.conf.json -> Tauri configuration (windows, bundle, security)
 ├── tsconfig.json
 ├── tsconfig.node.json

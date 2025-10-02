@@ -1,6 +1,6 @@
 //! Convert from `console_api::async_ops::AsyncOp` to our domain `AsyncOp`.
 
-use crate::domain::async_op::AsyncOp;
+use crate::backend::domain::async_op::AsyncOp;
 use console_api::async_ops;
 
 /// Maps a protobuf‐style `console_api` AsyncOp into the domain `AsyncOp`.

@@ -7,10 +7,10 @@
 
 #![allow(unused)]
 
-use crate::common::get_pid_hosting_at;
+use crate::utils::common::get_pid_hosting_at;
 use crate::{
-    domain::application::{self, Application},
-    error::Error as TraceError,
+    backend::domain::application::{self, Application},
+    utils::error::Error as TraceError,
 };
 use console_api::instrument::{instrument_client::InstrumentClient, InstrumentRequest, Update};
 use log::{debug, error, info, warn};
