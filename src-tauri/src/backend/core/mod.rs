@@ -148,7 +148,7 @@ impl StateManager {
                         };
 
                         tokio::join!(task_future, resource_future, async_op_future);
-                        println!("{:?}", warnings);
+                        info!("{:?}", warnings);
                     },
 
                     Event::ApplicationUpdated(update) => {
@@ -156,28 +156,28 @@ impl StateManager {
                     },
 
                     Event::Connecting => {
-                        println!("Connecting..");
+                        info!("Connecting..");
                         self.state.handle_app_conn_update(app_id, ConnectionStatus::Connecting).await;
                     },
 
                     Event::Connected => {
-                        println!("Connected");
+                        info!("Connected");
                         self.state.handle_app_conn_update(app_id, ConnectionStatus::Connected).await;
                     },
 
                     Event::Disconnected => {
-                        println!("Disconnected app");
+                        info!("Disconnected app");
                         self.delete_connection(app_id).await;
                         self.state.handle_app_conn_update(app_id, ConnectionStatus::Disconnected).await;
                     },
 
                     Event::Error(err) => {
-                        println!("Error with app connection: {err:?}");
+                        info!("Error with app connection: {err:?}");
                         self.state.handle_app_conn_update(app_id, ConnectionStatus::Error(err.to_string())).await;
                     }
 
                     Event::PidChanged(new_pid) => {
-                        println!("PID changed to {new_pid}");
+                        info!("PID changed to {new_pid}");
                         self.state.handle_pid_changed(app_id, new_pid).await;
                     }
                 }

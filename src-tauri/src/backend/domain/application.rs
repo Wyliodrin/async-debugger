@@ -66,8 +66,7 @@ impl Application {
     /// be retrieved.
     pub fn new(title: String, url: Url) -> Result<Application, TraceError> {
         // Find the PID of the app
-        let pid =
-            get_pid_hosting_at(url.clone()).ok_or(TraceError::PIDNotFound { url: url.clone() })?;
+        let pid = get_pid_hosting_at(url.clone())?;
         let start_time =
             get_process_start_time(pid).ok_or(TraceError::PIDNotFound { url: url.clone() })?;
 
@@ -193,7 +192,7 @@ impl Storable<HashMap<Uuid, Application>> for Application {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::connection_manager::Command;
+    use crate::backend::core::connection_manager::Command;
     use serde_json::to_string_pretty;
     use std::collections::HashMap;
     use std::fs;

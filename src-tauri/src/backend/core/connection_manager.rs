@@ -247,7 +247,7 @@ impl ConnectionManager {
                                         Self::check_app_stats(&mut sys, pid).await
                                         } {
                                         updates_sender.send((cloned_id, Event::ApplicationUpdated(app_update))).await.ok();
-                                    } else if let Some(new_pid) = get_pid_hosting_at(url.clone()){
+                                    } else if let Ok(new_pid) = get_pid_hosting_at(url.clone()){
                                             if new_pid != pid {
                                                 pid = new_pid;
                                                 updates_sender.send((cloned_id, Event::PidChanged(new_pid))).await.ok();
@@ -334,7 +334,6 @@ impl ConnectionManager {
     /// Returns `None` if the process no longer exists.
     async fn check_app_stats(sys: &mut System, pid: u32) -> Option<AppUpdate> {
         let cpu_count = sys.cpus().len() as f32;
-        // println!("CPUS: {cpu_count}");
         let process = sys.process(Pid::from_u32(pid))?;
         let cpu_per_core = process.cpu_usage() / cpu_count;
         let memory_mb = process.memory() / 1000000;

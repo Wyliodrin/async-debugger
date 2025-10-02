@@ -57,6 +57,25 @@ pub enum Error {
 
     #[error("Task not found: {0}")]
     TaskNotFound(String),
+
+    /// Failed to get the port of URL
+    #[error("PortNotFound: Could not find the port URL: {url}")]
+    PortNotFound {
+        /// The application URL for which the port was not found.
+        url: Url,
+    },
+
+    // AsyncOp ID not found
+    #[error("IDNotFound")]
+    IDNotFound,
+
+    // AsyncOp ResourceID not found
+    #[error("ResourceIDNotFound")]
+    ResourceIDNotFound,
+
+    // AsyncOp IDAndResourceIDNotFound not found
+    #[error("IDAndResourceIDNotFound")]
+    IDAndResourceIDNotFound,
 }
 
 impl serde::Serialize for Error {
