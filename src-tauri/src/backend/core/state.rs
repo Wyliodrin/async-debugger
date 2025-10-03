@@ -570,22 +570,6 @@ impl State {
         self.database.tasks_read().await.values().cloned().collect()
     }
 
-    /// Stops the task identified by `task_id` if it is currently running.
-    ///
-    /// The task state is set to `Stopped` with the current local timestamp.
-    pub async fn stop_task(&self, task_id: &str) {
-        let mut tasks = self.database.tasks_write().await;
-        if let Some(task_arc) = tasks.get_mut(task_id) {
-            let task = Arc::make_mut(task_arc);
-            if !matches!(task.state, TaskState::Stopped { at: _, reason: _ }) {
-                task.state = TaskState::Stopped {
-                    at: Local::now(),
-                    reason: None,
-                };
-            }
-        }
-    }
-
     /// Renames a task, updates its display color, and propagates the changes
     /// to any related poll records and task operations.
     ///
