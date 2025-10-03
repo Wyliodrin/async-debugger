@@ -17,13 +17,16 @@ pub mod warnings;
 use crate::backend::core::connection_manager::Connection;
 use crate::backend::core::state::State;
 use crate::backend::domain::application::{Application, ConnectionStatus};
+use crate::features::applications::{ExportEntry, TimestampEntry};
 use crate::utils::error::Error as TraceError;
 use anyhow::Result;
 use chrono::{DateTime, Local, TimeZone};
 use connection_manager::{ConnectionManager, Event};
 use log::{debug, error, info};
+use std::path::Path;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter as _};
+use tokio::fs;
 use tokio::sync::mpsc::{self, Receiver};
 use url::Url;
 use uuid::Uuid;
@@ -357,5 +360,147 @@ impl StateManager {
     pub async fn emit_update_tasks_op(&self, app_handle: &AppHandle) {
         let tasks_op = self.state.get_tasks_ops().await;
         app_handle.emit("update:tasks_ops", tasks_op).ok();
+    }
+
+    /// Checks duplicates by url and title
+    pub async fn ensure_not_connected(&self, title: &str, url: &str) -> Result<(), TraceError> {
+        let applications = self.current_applications().await;
+
+        for app in applications {
+            if app.url().to_string() == url {
+                return Err(TraceError::ApplicationAlreadyConnected(url.to_string()));
+            }
+            if app.title() == title {
+                return Err(TraceError::ApplicationAlreadyConnected(title.to_string()));
+            }
+        }
+        Ok(())
+    }
+
+    /// Validates duplicates, then parses the url and adds the app
+    pub async fn add_application_if_absent(
+        &self,
+        title: String,
+        url: &str,
+    ) -> Result<uuid::Uuid, TraceError> {
+        self.ensure_not_connected(&title, url).await?;
+        let url: url::Url = url.try_into()?;
+        self.add_application(title, url).await
+    }
+
+    /// enables flow: find app, connect via manager, mark it enabled
+    pub async fn enable_app(&self, uuid: Uuid) -> Result<(), TraceError> {
+        let apps = self.state.get_current_applications_list().await;
+        let app = apps
+            .iter()
+            .find(|a| a.id() == &uuid)
+            .ok_or_else(|| TraceError::Anyhow(anyhow::anyhow!("App {uuid} not found")))?;
+
+        // ask the existing connection manager to connect.
+        let conn: Connection = self
+            .connection_manager
+            .connect_app(*app.id(), app.url().clone(), app.pid())
+            .await?;
+
+        info!("enable_app: {uuid}");
+        self.state.enable_app(uuid, conn).await;
+        Ok(())
+    }
+
+    /// scans the given exports base and returns directories as ExportEntry, empty if missing
+    pub async fn list_exports_from_base(
+        &self,
+        exports_base: &Path,
+    ) -> Result<Vec<ExportEntry>, String> {
+        let mut out: Vec<ExportEntry> = Vec::new();
+
+        let mut dir = match fs::read_dir(exports_base).await {
+            Ok(rd) => rd,
+            Err(_) => return Ok(out),
+        };
+
+        while let Some(entry) = dir.next_entry().await.map_err(|e| e.to_string())? {
+            let file_type = entry.file_type().await.map_err(|e| e.to_string())?;
+            if file_type.is_dir() {
+                let folder_name = entry.file_name().to_string_lossy().to_string();
+                let title = folder_name.replace('-', " ");
+                out.push(ExportEntry {
+                    app_dir: folder_name,
+                    title,
+                });
+            }
+        }
+        Ok(out)
+    }
+
+    pub async fn app_timestamps(
+        &self,
+        storage_folder: String,
+        app_dir: String,
+    ) -> Result<Vec<TimestampEntry>, String> {
+        let app_folder = Path::new(&storage_folder).join("exports").join(&app_dir);
+        let mut out: Vec<TimestampEntry> = Vec::new();
+
+        let read_dir = match fs::read_dir(&app_folder).await {
+            Ok(rd) => rd,
+            Err(_) => return Ok(out),
+        };
+
+        let mut dir = read_dir;
+        while let Some(entry) = dir.next_entry().await.map_err(|e| e.to_string())? {
+            let meta = entry.file_type().await.map_err(|e| e.to_string())?;
+            if meta.is_dir() {
+                let ts_name = entry.file_name().to_string_lossy().to_string();
+                let comment_path = app_folder.join(&ts_name).join("comment.txt");
+                let comment_preview = match fs::read_to_string(&comment_path).await {
+                    Ok(s) => {
+                        let s = s.trim().to_string();
+                        if s.is_empty() {
+                            None
+                        } else {
+                            Some(if s.len() > 200 {
+                                s[..200].to_string() + "..."
+                            } else {
+                                s
+                            })
+                        }
+                    }
+                    Err(_) => None,
+                };
+                out.push(TimestampEntry {
+                    ts: ts_name.clone(),
+                    path: app_folder.join(&ts_name).to_string_lossy().to_string(),
+                    comment_preview,
+                });
+            }
+        }
+
+        out.sort_by(|a, b| b.ts.cmp(&a.ts));
+        Ok(out)
+    }
+
+    pub async fn import_from_exp_folder(
+        &self,
+        storage_folder: String,
+        app_dir: String,
+        ts: String,
+    ) -> Result<(), String> {
+        let base = Path::new(&storage_folder)
+            .join("exports")
+            .join(&app_dir)
+            .join(&ts);
+
+        if !base.exists() {
+            return Err(format!(
+                "Export folder not found: {}",
+                base.to_string_lossy()
+            ));
+        }
+        self.state
+            .import_from_export_folder(base)
+            .await
+            .map_err(|e| format!("Import error: {}", e))?;
+
+        Ok(())
     }
 }
