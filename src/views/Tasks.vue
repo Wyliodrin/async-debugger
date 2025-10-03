@@ -309,10 +309,10 @@ export default defineComponent({
           this.editedItem.warnings
         );
         this.close();
-      } catch (error: any) {
+      } catch (error: unknown) {
         this.dialog = true;
         console.error("Edit task failed:", error);
-        alert("Edit task failed:" + (error?.message ?? String(error)));
+        alert("Edit task failed:" + (String(error)));
       }
     },
 
