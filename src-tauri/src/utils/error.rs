@@ -54,6 +54,9 @@ pub enum Error {
         /// The application URL for which channel creation failed.
         url: String,
     },
+
+    #[error("Task not found: {0}")]
+    TaskNotFound(String),
 }
 
 impl serde::Serialize for Error {

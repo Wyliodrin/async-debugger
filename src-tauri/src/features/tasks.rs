@@ -35,6 +35,5 @@ pub async fn edit_task(
             app_name.clone(),
             warnings.clone(),
         )
-        .await;
-    Ok(())
+        .await
 }

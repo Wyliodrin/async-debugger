@@ -44,11 +44,12 @@ export const useDataStore = defineStore('data', () => {
     async function editTask(task_id: number, task_name: string, task_color:string, app_name: string, warnings: TaskWarnings) {
         await invoke('edit_task', {taskId: task_id, taskName: task_name, taskColor: task_color, appName: app_name, warnings: warnings}).then(
             () => {
-                console.log("task-ul a fost modificat cu succes");
+                console.log("task " + task_id.toString() + " was successfully edited.");
             }
         ).catch(
             (error) => {
-                console.log(task_id.toString() + "nu s-a putut modifica numele task-ului eroare:" + error);
+                console.log("error editing task " + task_id.toString() + ": " + error);
+                throw error;
             }
         );
     }
