@@ -570,22 +570,6 @@ impl State {
         self.database.tasks_read().await.values().cloned().collect()
     }
 
-    /// Stops the task identified by `task_id` if it is currently running.
-    ///
-    /// The task state is set to `Stopped` with the current local timestamp.
-    pub async fn stop_task(&self, task_id: &str) {
-        let mut tasks = self.database.tasks_write().await;
-        if let Some(task_arc) = tasks.get_mut(task_id) {
-            let task = Arc::make_mut(task_arc);
-            if !matches!(task.state, TaskState::Stopped { at: _, reason: _ }) {
-                task.state = TaskState::Stopped {
-                    at: Local::now(),
-                    reason: None,
-                };
-            }
-        }
-    }
-
     /// Renames a task, updates its display color, and propagates the changes
     /// to any related poll records and task operations.
     ///
@@ -608,42 +592,51 @@ impl State {
         task_color: String,
         app_name: String,
         warnings: TaskWarnings,
-    ) {
+    ) -> Result<(), TraceError> {
         let key = format!("{}.{}", app_name, task_id);
 
-        // Update the task record itself
         let mut tasks = self.database.tasks_write().await;
-        let mut old_name = None;
-        let mut old_color = None;
-        if let Some(task_arc) = tasks.get_mut(&key) {
-            let task = Arc::make_mut(task_arc);
-            old_name = task.name.clone();
-            old_color = task.color.clone();
-            task.name = Some(task_name.clone());
-            task.color = Some(task_color.clone());
-            task.warnings = warnings;
-        }
+        let Some(task_arc) = tasks.get_mut(&key) else {
+            warn!("Edit failed, task not found. key={key}");
+            return Err(TraceError::TaskNotFound(key));
+        };
+
+        let task = Arc::make_mut(task_arc);
+        let old_name = task.name.clone();
+        let old_color = task.color.clone();
+
+        task.name = Some(task_name.clone());
+        task.color = Some(task_color.clone());
+        task.warnings = warnings;
+
+        drop(tasks);
 
         if (old_name != Some(task_name.clone())) || (old_color != Some(task_color.clone())) {
-            // Update all polls associated with this task
             let mut polls = self.database.polls_write().await;
-            polls
-                .iter_mut()
-                .filter(|poll| poll.task_id == Some(task_id))
-                .for_each(|poll_arc| {
-                    let mut updated_poll = (**poll_arc).clone();
-                    updated_poll.task_name = Some(task_name.clone());
-                    updated_poll.task_color = Some(task_color.clone());
-                    *poll_arc = Arc::new(updated_poll);
-                });
+            // Update all polls associated with this task
+            for poll_arc in polls.iter_mut().filter(|p| p.task_id == Some(task_id)) {
+                let mut updated = (**poll_arc).clone();
+                updated.task_name = Some(task_name.clone());
+                updated.task_color = Some(task_color.clone());
+                *poll_arc = Arc::new(updated);
+            }
+            drop(polls);
+
+            let mut ops = self.database.tasks_ops_write().await;
 
             // Update any task-operation entries
-            if let Some(task_op_arc) = self.database.tasks_ops_write().await.get_mut(&key) {
+            if let Some(task_op_arc) = ops.get_mut(&key) {
                 let task_op = Arc::make_mut(task_op_arc);
                 task_op.task_name = Some(task_name.clone());
                 task_op.task_color = Some(task_color.clone());
             }
+
+            info!("Edited task key={key} name={task_name} color={task_color}");
+        } else {
+            debug!("No chages were made for task key={key}, skipping updates");
         }
+
+        Ok(())
     }
 
     // endregion

@@ -300,14 +300,20 @@ export default defineComponent({
 
     async save() {
       this.dialog = false;
-      this.dataStore.editTask(
-        this.editedItem.id,
-        this.editedItem.name,
-        this.editedItem.color,
-        this.editedItem.app_name,
-        this.editedItem.warnings
-      );
-      this.close();
+      try {
+        await this.dataStore.editTask(
+          this.editedItem.id,
+          this.editedItem.name,
+          this.editedItem.color,
+          this.editedItem.app_name,
+          this.editedItem.warnings
+        );
+        this.close();
+      } catch (error: unknown) {
+        this.dialog = true;
+        console.error("Edit task failed:", error);
+        alert("Edit task failed:" + (String(error)));
+      }
     },
 
     editTask(task: Task) {

@@ -1,4 +1,3 @@
-use crate::backend::core::connection_manager::Connection;
 use crate::backend::core::StateManager;
 use crate::utils::error::Error;
 use log::info;
@@ -6,7 +5,6 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Arc;
 use tauri::State as TauriState;
-use tokio::fs;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize)]
@@ -47,18 +45,7 @@ pub async fn applications_add(
     url: &str,
 ) -> Result<Uuid, Error> {
     info!("Received command to add application with title {title} and url {url}");
-
-    let applications = state_manager.current_applications().await;
-    for app in applications {
-        if app.url().to_string() == url {
-            return Err(Error::ApplicationAlreadyConnected(url.into()));
-        }
-        if app.title() == title {
-            return Err(Error::ApplicationAlreadyConnected(title));
-        }
-    }
-    let url = url.try_into()?;
-    state_manager.add_application(title, url).await
+    state_manager.add_application_if_absent(title, url).await
 }
 
 /// Delete a monitored application by its UUID.
@@ -100,22 +87,7 @@ pub async fn enable_app(
     state_manager: TauriState<'_, Arc<StateManager>>,
     uuid: Uuid,
 ) -> Result<(), Error> {
-    let apps = state_manager.state.get_current_applications_list().await;
-    let app = apps
-        .iter()
-        .find(|a| a.id() == &uuid)
-        .ok_or_else(|| Error::Anyhow(anyhow::anyhow!("App {uuid} not found")))?;
-
-    // ask the existing connection manager to connect.
-    let conn: Connection = state_manager
-        .connection_manager
-        .connect_app(*app.id(), app.url().clone(), app.pid())
-        .await?;
-
-    // flip state to Enabled and stash the new connection
-    info!("enable_app: {uuid}");
-    state_manager.state.enable_app(uuid, conn).await;
-    Ok(())
+    state_manager.enable_app(uuid).await
 }
 
 /// Disable a previously enabled application (i.e. tear down its connection).
@@ -215,74 +187,21 @@ pub async fn export_app_instance(
 }
 
 #[tauri::command]
-pub async fn list_exports(storage_folder: String) -> Result<Vec<ExportEntry>, String> {
+pub async fn list_exports(
+    state_manager: TauriState<'_, Arc<StateManager>>,
+    storage_folder: String,
+) -> Result<Vec<ExportEntry>, String> {
     let exports_base = Path::new(&storage_folder).join("exports");
-    let mut out: Vec<ExportEntry> = Vec::new();
-
-    let read_dir = match fs::read_dir(&exports_base).await {
-        Ok(rd) => rd,
-        Err(_) => return Ok(out),
-    };
-
-    let mut dir = read_dir;
-    while let Some(entry) = dir.next_entry().await.map_err(|e| e.to_string())? {
-        let file_type = entry.file_type().await.map_err(|e| e.to_string())?;
-        if file_type.is_dir() {
-            let folder_name = entry.file_name().to_string_lossy().to_string();
-            let title = folder_name.replace('-', " ");
-            out.push(ExportEntry {
-                app_dir: folder_name,
-                title,
-            });
-        }
-    }
-    Ok(out)
+    state_manager.list_exports_from_base(&exports_base).await
 }
 
 #[tauri::command]
 pub async fn list_app_timestamps(
     storage_folder: String,
     app_dir: String,
+    state_manager: TauriState<'_, Arc<StateManager>>,
 ) -> Result<Vec<TimestampEntry>, String> {
-    let app_folder = Path::new(&storage_folder).join("exports").join(&app_dir);
-    let mut out: Vec<TimestampEntry> = Vec::new();
-
-    let read_dir = match fs::read_dir(&app_folder).await {
-        Ok(rd) => rd,
-        Err(_) => return Ok(out),
-    };
-
-    let mut dir = read_dir;
-    while let Some(entry) = dir.next_entry().await.map_err(|e| e.to_string())? {
-        let meta = entry.file_type().await.map_err(|e| e.to_string())?;
-        if meta.is_dir() {
-            let ts_name = entry.file_name().to_string_lossy().to_string();
-            let comment_path = app_folder.join(&ts_name).join("comment.txt");
-            let comment_preview = match fs::read_to_string(&comment_path).await {
-                Ok(s) => {
-                    let s = s.trim().to_string();
-                    if s.is_empty() {
-                        None
-                    } else {
-                        Some(if s.len() > 200 {
-                            s[..200].to_string() + "..."
-                        } else {
-                            s
-                        })
-                    }
-                }
-                Err(_) => None,
-            };
-            out.push(TimestampEntry {
-                ts: ts_name.clone(),
-                path: app_folder.join(&ts_name).to_string_lossy().to_string(),
-                comment_preview,
-            });
-        }
-    }
-
-    out.sort_by(|a, b| b.ts.cmp(&a.ts));
-    Ok(out)
+    state_manager.app_timestamps(storage_folder, app_dir).await
 }
 
 #[tauri::command]
@@ -292,23 +211,7 @@ pub async fn import_from_export_folder(
     ts: String,
     state: TauriState<'_, Arc<StateManager>>,
 ) -> Result<(), String> {
-    let base = Path::new(&storage_folder)
-        .join("exports")
-        .join(&app_dir)
-        .join(&ts);
-
-    if !base.exists() {
-        return Err(format!(
-            "Export folder not found: {}",
-            base.to_string_lossy()
-        ));
-    }
     state
-        .inner()
-        .state
-        .import_from_export_folder(base)
+        .import_from_exp_folder(storage_folder, app_dir, ts)
         .await
-        .map_err(|e| format!("Import error: {}", e))?;
-
-    Ok(())
 }

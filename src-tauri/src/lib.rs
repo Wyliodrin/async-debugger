@@ -81,7 +81,6 @@ pub async fn run() {
             features::applications::list_exports,
             features::applications::list_app_timestamps,
             features::applications::import_from_export_folder,
-            features::tasks::remove_task,
             features::tasks::edit_task,
         ])
         // Launch the Tauri event loop with our generated context.

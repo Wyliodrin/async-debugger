@@ -4,25 +4,6 @@ use crate::utils::error::Error;
 use std::sync::Arc;
 use tauri::State;
 
-/// Remove a running or stopped task by its ID.
-///
-/// # Arguments
-///
-/// * `state_manager` – shared application state manager  
-/// * `task_id` – the string identifier of the task
-///
-/// # Returns
-///
-/// Returns `Ok(())` on success, or an [`Error`] on failure.
-#[tauri::command]
-pub async fn remove_task(
-    state_manager: State<'_, Arc<StateManager>>,
-    task_id: String,
-) -> Result<(), Error> {
-    state_manager.state.stop_task(&task_id).await;
-    Ok(())
-}
-
 /// Edit an existing task’s metadata (name, color, associated app).
 ///
 /// # Arguments
@@ -54,6 +35,5 @@ pub async fn edit_task(
             app_name.clone(),
             warnings.clone(),
         )
-        .await;
-    Ok(())
+        .await
 }
