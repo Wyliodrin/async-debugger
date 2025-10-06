@@ -1,13 +1,10 @@
+use crate::utils::error::Error as TraceError;
 use chrono::{DateTime, Local};
-use serde::Serialize;
-use std::fmt::Debug;
-use std::sync::Arc;
-use std::{collections::HashMap, process::Command};
+use log::error;
+use log::info;
+use std::process::Command;
 use sysinfo::{Pid, System};
 use url::Url;
-
-use crate::backend::domain::has_app_name::HasAppName;
-use crate::backend::infra::guard::WriteableDataBaseGuard;
 
 /// Returns the PID of the process listening on the given URL’s port, if any.
 ///
@@ -24,10 +21,13 @@ use crate::backend::infra::guard::WriteableDataBaseGuard;
 ///
 /// On Linux and macOS, this spawns `lsof -ti :<port>` and parses its output.
 /// On Windows, this spawns `netstat -ano` and searches for the port in each line.
-pub fn get_pid_hosting_at(url: Url) -> Option<u32> {
+pub fn get_pid_hosting_at(url: Url) -> Result<u32, TraceError> {
     // Extract the port number from the URL; return None if absent.
-    let port = url.port()?;
-    println!("Port: {}", port);
+    let port = url
+        .port()
+        .ok_or(TraceError::PortNotFound { url: url.clone() })?;
+
+    info!("Port: {}", port);
 
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
@@ -35,11 +35,14 @@ pub fn get_pid_hosting_at(url: Url) -> Option<u32> {
         let output = Command::new("lsof")
             .args(["-ti", &format!(":{}", port)])
             .output()
-            .ok()?;
+            .map_err(|err| {
+                error!("Cannot execute lsof, error: {err:?}");
+                TraceError::PIDNotFound { url: url.clone() }
+            })?;
 
         // If no output, no process found
         if output.stdout.is_empty() {
-            return None;
+            return Err(TraceError::PIDNotFound { url: url.clone() });
         }
 
         // Parse the PID out of the stdout
@@ -48,17 +51,23 @@ pub fn get_pid_hosting_at(url: Url) -> Option<u32> {
         // is typically the last end line-separated token.
         if let Some(pid_str) = output_str.lines().last() {
             if let Ok(pid) = pid_str.parse::<u32>() {
-                println!("{:?}", pid);
-                return Some(pid);
+                info!("Found pin {:?} for url {:?}", pid, url);
+                return Ok(pid);
             }
         }
-        None
+        Err(TraceError::PIDNotFound { url: url.clone() })
     }
 
     #[cfg(target_os = "windows")]
     {
         // Use netstat to list all TCP/UDP connections with PIDs.
-        let output = Command::new("netstat").args(["-ano"]).output().ok()?;
+        let output = Command::new("netstat")
+            .args(["-ano"])
+            .output()
+            .map_err(|err| {
+                error!("Cannot execute netstat, error: {err:?}");
+                TraceError::PIDNotFound { url: url.clone() }
+            })?;
         // This needs to be lossy, because the netstat output sometimes contains non UTF-8 characters
         let stdout = String::from_utf8_lossy(&output.stdout);
 
@@ -68,12 +77,12 @@ pub fn get_pid_hosting_at(url: Url) -> Option<u32> {
                 // The PID is typically the last whitespace-separated token.
                 if let Some(pid_str) = line.split_whitespace().last() {
                     if let Ok(pid) = pid_str.parse::<u32>() {
-                        return Some(pid);
+                        return Ok(pid);
                     }
                 }
             }
         }
-        None
+        Err(TraceError::PIDNotFound { url: url.clone() })
     }
 }
 
@@ -104,84 +113,6 @@ pub fn get_process_start_time(pid: u32) -> Option<String> {
         return Some(date);
     }
 
-    // PID not found in the system
+    error!("PID not found in the system");
     None
-}
-
-/// This is used when the user renames an application
-///
-/// Renames keys in the given database guard by replacing the `old_title` prefix
-/// in keys with the `new_title` prefix. The function iterates over all keys,
-/// collects the keys that start with `old_title.`, and renames them accordiungly.
-///
-/// # Arguments
-///
-/// * `guard` - A mutable reference to a writable database guard holding a `HashMap`
-///   where keys are strings and values are of generic type `T`.
-/// * `new_title` - The new title string to replace the old title prefix in keys.
-/// * `old_title` - The old title string prefix to be replaced in keys.
-///
-/// # Type Parameters
-///
-/// * `T` - The type of the values in the hashmap. Must implement `Serialize` and `Debug`.
-pub fn rename_database_keys<T: Serialize + Debug>(
-    guard: &mut WriteableDataBaseGuard<'_, HashMap<String, T>>,
-    new_title: String,
-    old_title: String,
-) {
-    let mut changes = Vec::new();
-    for key in guard.keys() {
-        if let Some(rest) = key.strip_prefix(&format!("{}.", old_title)) {
-            let new_key = format!("{}.{}", new_title, rest);
-            changes.push((key.clone(), new_key));
-        }
-    }
-
-    for (old, new) in changes {
-        if let Some(val) = guard.remove(&old) {
-            guard.insert(new, val);
-        }
-    }
-}
-
-/// This is used when the user renames an application
-///
-/// Renames keys in the given database guard by replacing the `old_title` prefix
-/// in keys with the `new_title` prefix. In addition, it updates the `app_name`
-/// attribute of the value associated with each renamed key.
-///
-/// This function works on database guards containing `HashMap<String, Arc<T>>`,
-/// where `T` must implement `Serialize`, `Debug`, `HasAppName`, and `Clone`.
-///
-/// # Arguments
-///
-/// * `guard` - A mutable reference to a writable database guard holding a `HashMap`
-///   where keys are strings and values are `Arc` wrapped generic type `T`.
-/// * `new_title` - The new title string to replace the old title prefix in keys.
-/// * `old_title` - The old title string prefix to be replaced in keys.
-///
-/// # Type Parameters
-///
-/// * `T` - The type of the values inside the Arc in the hashmap. Must implement
-///   Implements `Serialize`, `Debug`, `HasAppName` (a trait providing `set_app_name`), and `Clone`.
-pub fn rename_database_keys_and_app_name<T: Serialize + Debug + HasAppName + Clone>(
-    guard: &mut WriteableDataBaseGuard<'_, HashMap<String, Arc<T>>>,
-    new_title: String,
-    old_title: String,
-) {
-    let mut changes = Vec::new();
-    for key in guard.keys() {
-        if let Some(rest) = key.strip_prefix(&format!("{}.", old_title)) {
-            let new_key = format!("{}.{}", new_title, rest);
-            changes.push((key.clone(), new_key));
-        }
-    }
-
-    for (old, new) in changes {
-        if let Some(mut val_arc) = guard.remove(&old) {
-            let val = Arc::make_mut(&mut val_arc);
-            val.set_app_name(new_title.clone());
-            guard.insert(new, Arc::new(val.clone()));
-        }
-    }
 }

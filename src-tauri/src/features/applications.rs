@@ -1,6 +1,6 @@
 use crate::backend::core::StateManager;
 use crate::utils::error::Error;
-use log::info;
+use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Arc;
@@ -164,11 +164,10 @@ pub async fn get_app_pid(
     state_manager: TauriState<'_, Arc<StateManager>>,
     uuid: Uuid,
 ) -> Result<u32, Error> {
-    state_manager
-        .state
-        .get_pid_for(uuid)
-        .await
-        .ok_or_else(|| Error::Anyhow(anyhow::anyhow!("App {uuid} not found")))
+    state_manager.state.get_pid_for(uuid).await.ok_or_else(|| {
+        error!("Error at fetching the current PID of the appliction with uuid: {uuid}");
+        Error::Anyhow(anyhow::anyhow!("App {uuid} not found"))
+    })
 }
 
 #[tauri::command]
@@ -183,7 +182,10 @@ pub async fn export_app_instance(
         .export_app_instance(title, name)
         .await
         .map(|p| p.to_string_lossy().to_string())
-        .map_err(|e| format!("Export error: {}", e))
+        .map_err(|e| {
+            error!("Export error: {e}");
+            format!("Export error: {e}")
+        })
 }
 
 #[tauri::command]

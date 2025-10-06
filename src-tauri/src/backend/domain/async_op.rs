@@ -94,6 +94,7 @@ impl Storable<HashMap<String, TaskOp>> for TaskOp {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::error::Error as TraceError;
     use chrono::TimeZone;
     use serde_json::to_string_pretty;
     use std::collections::HashMap;
@@ -101,7 +102,6 @@ mod tests {
     use std::io::Write;
     use tempfile::tempdir;
     use tokio;
-    use utils::error::Error as TraceError;
 
     #[tokio::test]
     async fn asyncop_load_all_success() {

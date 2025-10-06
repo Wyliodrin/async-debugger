@@ -3,13 +3,14 @@ use super::database::Database;
 use crate::backend::core::warnings::TaskWarnings;
 use crate::backend::domain::application::{ApplicationState, ConnectionStatus};
 use crate::backend::domain::async_op::{CPUOverview, TaskOp};
+use crate::backend::domain::has_app_name::HasAppName;
 use crate::backend::domain::resource::ResourceStatus;
 use crate::backend::domain::TaskState;
-use crate::backend::infra::guard::DataBaseWrite;
+use crate::backend::infra::guard::{DataBaseWrite, WriteableDataBaseGuard};
 use crate::backend::infra::storage::Storage;
-use crate::utils::common::{
-    get_pid_hosting_at, rename_database_keys, rename_database_keys_and_app_name,
-};
+use crate::utils::common::get_pid_hosting_at;
+use std::fmt::Debug;
+
 use crate::utils::error::Error as TraceError;
 use crate::{
     backend::domain::{application::Application, poll::Poll, resource::Resource, Task},
@@ -23,6 +24,8 @@ use console_api::async_ops::AsyncOpUpdate;
 use console_api::resources::ResourceUpdate;
 use console_api::tasks::TaskUpdate;
 use log::{debug, error, info, warn};
+use serde::Serialize;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -91,7 +94,7 @@ impl State {
         // Refresh PIDs for applications whose host process may have changed
         let mut guard = database.applications_write().await;
         for (_uuid, app) in guard.iter_mut() {
-            if let Some(pid) = get_pid_hosting_at(app.url().clone()) {
+            if let Ok(pid) = get_pid_hosting_at(app.url().clone()) {
                 if app.pid() != pid {
                     debug!("Updating the PID for app {} to {}", app.title(), pid);
                     app.writeable().set_pid(pid);
@@ -211,12 +214,12 @@ impl State {
     pub async fn edit_app(&self, new_title: String, old_title: String) -> Result<(), TraceError> {
         {
             let mut async_guard = self.database.async_ops_write().await;
-            rename_database_keys(&mut async_guard, new_title.clone(), old_title.clone());
+            Self::rename_database_keys(&mut async_guard, new_title.clone(), old_title.clone());
         }
 
         {
             let mut resource_guard = self.database.resources_write().await;
-            rename_database_keys_and_app_name(
+            Self::rename_database_keys_and_app_name(
                 &mut resource_guard,
                 new_title.clone(),
                 old_title.clone(),
@@ -225,7 +228,7 @@ impl State {
 
         {
             let mut tasks_guard = self.database.tasks_write().await;
-            rename_database_keys_and_app_name(
+            Self::rename_database_keys_and_app_name(
                 &mut tasks_guard,
                 new_title.clone(),
                 old_title.clone(),
@@ -234,7 +237,7 @@ impl State {
 
         {
             let mut tasks_ops_guard = self.database.tasks_ops_write().await;
-            rename_database_keys(&mut tasks_ops_guard, new_title.clone(), old_title.clone());
+            Self::rename_database_keys(&mut tasks_ops_guard, new_title.clone(), old_title.clone());
         }
 
         {
@@ -291,7 +294,7 @@ impl State {
 
         // debug for missed task_updates
         if task_update.dropped_events > 0 {
-            println!("missed task updates: {:?}", task_update.dropped_events);
+            info!("missed task updates: {:?}", task_update.dropped_events);
         }
 
         if let Some(app) = self.database.applications_read().await.get(&app_id) {
@@ -556,7 +559,6 @@ impl State {
         if let Some(app) = apps.get_mut(&app_id) {
             app.writeable().set_pid(new_pid);
         }
-        // drop guard
     }
 
     /// Lookup the current PID for an application.
@@ -669,7 +671,7 @@ impl State {
     ) {
         // debug for missed resources_updates
         if resources_update.dropped_events > 0 {
-            println!(
+            info!(
                 "missed resources updates: {:?}",
                 resources_update.dropped_events
             );
@@ -887,7 +889,7 @@ impl State {
     ///    task metadata (name/color) and the new CPU overview.  
     pub async fn handle_async_op_update(&self, app_id: Uuid, async_op_update: AsyncOpUpdate) {
         if async_op_update.dropped_events > 0 {
-            println!(
+            warn!(
                 "missed async_op updates: {:?}",
                 async_op_update.dropped_events
             );
@@ -920,15 +922,18 @@ impl State {
 
             // Insert any new async-ops
             for raw in async_op_update.new_async_ops {
-                if let Some(mut domain_async_op) = map_to_domain_async_op(&raw) {
-                    let key = format!("{}.{}", app.title(), domain_async_op.resource_id);
-                    if let Some(resource) = self.database.resources_read().await.get(&key) {
-                        domain_async_op.resource_target = resource.target.clone();
-                        self.database.async_ops_write().await.insert(
-                            format!("{}.{}", app.title(), domain_async_op.id),
-                            Arc::new(domain_async_op),
-                        );
+                match map_to_domain_async_op(&raw) {
+                    Ok(mut domain_async_op) => {
+                        let key = format!("{}.{}", app.title(), domain_async_op.resource_id);
+                        if let Some(resource) = self.database.resources_read().await.get(&key) {
+                            domain_async_op.resource_target = resource.target.clone();
+                            self.database.async_ops_write().await.insert(
+                                format!("{}.{}", app.title(), domain_async_op.id),
+                                Arc::new(domain_async_op),
+                            );
+                        }
                     }
+                    Err(err) => error!("Error at inserting new async-ops, error: {err:?}"),
                 }
             }
 
@@ -1110,6 +1115,84 @@ impl State {
     }
 
     // endregion
+
+    /// This is used when the user renames an application
+    ///
+    /// Renames keys in the given database guard by replacing the `old_title` prefix
+    /// in keys with the `new_title` prefix. The function iterates over all keys,
+    /// collects the keys that start with `old_title.`, and renames them accordiungly.
+    ///
+    /// # Arguments
+    ///
+    /// * `guard` - A mutable reference to a writable database guard holding a `HashMap`
+    ///   where keys are strings and values are of generic type `T`.
+    /// * `new_title` - The new title string to replace the old title prefix in keys.
+    /// * `old_title` - The old title string prefix to be replaced in keys.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `T` - The type of the values in the hashmap. Must implement `Serialize` and `Debug`.
+    fn rename_database_keys<T: Serialize + Debug>(
+        guard: &mut WriteableDataBaseGuard<'_, HashMap<String, T>>,
+        new_title: String,
+        old_title: String,
+    ) {
+        let mut changes = Vec::new();
+        for key in guard.keys() {
+            if let Some(rest) = key.strip_prefix(&format!("{}.", old_title)) {
+                let new_key = format!("{}.{}", new_title, rest);
+                changes.push((key.clone(), new_key));
+            }
+        }
+
+        for (old, new) in changes {
+            if let Some(val) = guard.remove(&old) {
+                guard.insert(new, val);
+            }
+        }
+    }
+
+    /// This is used when the user renames an application
+    ///
+    /// Renames keys in the given database guard by replacing the `old_title` prefix
+    /// in keys with the `new_title` prefix. In addition, it updates the `app_name`
+    /// attribute of the value associated with each renamed key.
+    ///
+    /// This function works on database guards containing `HashMap<String, Arc<T>>`,
+    /// where `T` must implement `Serialize`, `Debug`, `HasAppName`, and `Clone`.
+    ///
+    /// # Arguments
+    ///
+    /// * `guard` - A mutable reference to a writable database guard holding a `HashMap`
+    ///   where keys are strings and values are `Arc` wrapped generic type `T`.
+    /// * `new_title` - The new title string to replace the old title prefix in keys.
+    /// * `old_title` - The old title string prefix to be replaced in keys.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `T` - The type of the values inside the Arc in the hashmap. Must implement
+    ///   Implements `Serialize`, `Debug`, `HasAppName` (a trait providing `set_app_name`), and `Clone`.
+    fn rename_database_keys_and_app_name<T: Serialize + Debug + HasAppName + Clone>(
+        guard: &mut WriteableDataBaseGuard<'_, HashMap<String, Arc<T>>>,
+        new_title: String,
+        old_title: String,
+    ) {
+        let mut changes = Vec::new();
+        for key in guard.keys() {
+            if let Some(rest) = key.strip_prefix(&format!("{}.", old_title)) {
+                let new_key = format!("{}.{}", new_title, rest);
+                changes.push((key.clone(), new_key));
+            }
+        }
+
+        for (old, new) in changes {
+            if let Some(mut val_arc) = guard.remove(&old) {
+                let val = Arc::make_mut(&mut val_arc);
+                val.set_app_name(new_title.clone());
+                guard.insert(new, Arc::new(val.clone()));
+            }
+        }
+    }
 }
 
 #[cfg(test)]
