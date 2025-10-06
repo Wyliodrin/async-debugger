@@ -1,11 +1,12 @@
-export type Application = {
+export interface Application {
+  connection_status: string;
+  state: string,
+  pid: number;
   id: string;
+  startTime: string;
   title: string;
   url: string;
-  state: string;
-
-  startTime?: string,
-  pid?: number,
-  cpuUsage?: number,
-  memoryUsage?: number,
+  cpu_usage: number;
+  memory_usage: number;
+  processStatus: string;
 }

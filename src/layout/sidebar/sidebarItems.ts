@@ -1,4 +1,4 @@
-import { ChecklistIcon, InfoSquareRoundedIcon, TablerIconComponent } from "vue-tabler-icons"
+import { ChecklistIcon,InfoSquareRoundedIcon, TablerIconComponent } from "vue-tabler-icons"
 
 export interface sidebarItem {
     title: string,
@@ -17,6 +17,16 @@ const sidebarItems: sidebarItem[] = [
         icon: ChecklistIcon,
         to: '/tasks-overview'
     },
+    {
+        title: 'Resources Overview',
+        icon: ChecklistIcon,
+        to: '/resources-overview'
+    },
+    {
+        title: 'Polling Overview',
+        icon: ChecklistIcon,
+        to: '/polls-overview'
+    }
 ]
 
 export default sidebarItems;
