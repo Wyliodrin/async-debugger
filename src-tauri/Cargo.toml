@@ -16,6 +16,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+tonic-build = "0.12"
 
 [dependencies]
 tokio = { version = "1.43.0", features = ["sync"] }
@@ -35,4 +36,8 @@ env_logger = "0.10.0"
 async-trait = "0.1.86"
 dirs = "6.0.0"
 tauri-plugin-dialog = "2"
+chrono = { version = "0.4.1", features = ["serde"] }
+sysinfo = "0.35.2"
+tempfile = "3.20.0"
+futures = "0.3.31"
 

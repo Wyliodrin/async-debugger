@@ -1,0 +1,8 @@
+[package]
+name = "async-debugger"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "tracing", "net" ] }
+console-subscriber = "0.4.1"

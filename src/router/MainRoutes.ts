@@ -20,6 +20,21 @@ const MainRoutes = {
             path: '/tasks-overview',
             component: () => import('@/views/Tasks.vue')
         },
+        {
+            name: 'Resources Overview',
+            path: '/resources-overview',
+            component: () => import('@/views/Resources.vue')
+        },
+        {
+            name: 'Polling Overview',
+            path: '/polls-overview',
+            component: () => import('@/views/Polls.vue')
+        },
+        {
+            name: 'CPU Overview',
+            path: '/cpu-overview',
+            component: () => import('@/views/CPU.vue')
+        }
     ]
 }
 
